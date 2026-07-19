@@ -715,6 +715,594 @@
       "long_running": false,
       "scopes": [],
       "owner_chat_tool": "github-connector"
+    },
+    {
+      "name": "list_pull_requests",
+      "description": "List pull requests on a connected GitHub repository (open by default).",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "state": {
+            "default": "open",
+            "description": "'open', 'closed', or 'all'",
+            "title": "State",
+            "type": "string"
+          },
+          "limit": {
+            "default": 20,
+            "description": "Max pull requests to return, 1-100",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "title": "ListPullsParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "PullRequest": {
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "number": {
+                "default": 0,
+                "title": "Number",
+                "type": "integer"
+              },
+              "state": {
+                "default": "open",
+                "title": "State",
+                "type": "string"
+              },
+              "author": {
+                "default": "",
+                "title": "Author",
+                "type": "string"
+              },
+              "base": {
+                "default": "",
+                "title": "Base",
+                "type": "string"
+              },
+              "head": {
+                "default": "",
+                "title": "Head",
+                "type": "string"
+              },
+              "draft": {
+                "default": false,
+                "title": "Draft",
+                "type": "boolean"
+              },
+              "created_at": {
+                "default": "",
+                "title": "Created At",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "PullRequest",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/PullRequest"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[PullRequest]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
+      "name": "list_issues",
+      "description": "List issues on a connected GitHub repository (open by default). Pull requests are excluded — use list_pull_requests for those.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "state": {
+            "default": "open",
+            "description": "'open', 'closed', or 'all'",
+            "title": "State",
+            "type": "string"
+          },
+          "limit": {
+            "default": 20,
+            "description": "Max issues to return, 1-100",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "title": "ListIssuesParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "Issue": {
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "number": {
+                "default": 0,
+                "title": "Number",
+                "type": "integer"
+              },
+              "state": {
+                "default": "open",
+                "title": "State",
+                "type": "string"
+              },
+              "author": {
+                "default": "",
+                "title": "Author",
+                "type": "string"
+              },
+              "comments": {
+                "default": 0,
+                "title": "Comments",
+                "type": "integer"
+              },
+              "created_at": {
+                "default": "",
+                "title": "Created At",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "Issue",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/Issue"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[Issue]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
+      "name": "get_workflow_runs",
+      "description": "List recent GitHub Actions workflow runs for a connected repository — status, conclusion, and branch of each.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "limit": {
+            "default": 20,
+            "description": "Max workflow runs to return, 1-100",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "title": "WorkflowRunsParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "WorkflowRun": {
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "run_number": {
+                "default": 0,
+                "title": "Run Number",
+                "type": "integer"
+              },
+              "workflow_name": {
+                "default": "",
+                "title": "Workflow Name",
+                "type": "string"
+              },
+              "conclusion": {
+                "default": "",
+                "title": "Conclusion",
+                "type": "string"
+              },
+              "branch": {
+                "default": "",
+                "title": "Branch",
+                "type": "string"
+              },
+              "event": {
+                "default": "",
+                "title": "Event",
+                "type": "string"
+              },
+              "created_at": {
+                "default": "",
+                "title": "Created At",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "WorkflowRun",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/WorkflowRun"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[WorkflowRun]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
     }
   ],
   "signals": [],

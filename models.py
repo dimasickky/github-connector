@@ -61,3 +61,49 @@ class Contributor(sdl.Entity):
     login: str = ""
     contributions: int = 0
     avatar_url: str = ""
+
+
+# ── P3: read-only PR / issues / actions ─────────────────────────────────── #
+
+class ListPullsParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    state: str = Field(default="open", description="'open', 'closed', or 'all'")
+    limit: int = Field(default=20, ge=1, le=100, description="Max pull requests to return, 1-100")
+
+
+class ListIssuesParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    state: str = Field(default="open", description="'open', 'closed', or 'all'")
+    limit: int = Field(default=20, ge=1, le=100, description="Max issues to return, 1-100")
+
+
+class WorkflowRunsParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    limit: int = Field(default=20, ge=1, le=100, description="Max workflow runs to return, 1-100")
+
+
+class PullRequest(sdl.Entity):
+    number: int = 0
+    state: str = "open"
+    author: str = ""
+    base: str = ""
+    head: str = ""
+    draft: bool = False
+    created_at: str = ""
+
+
+class Issue(sdl.Entity):
+    number: int = 0
+    state: str = "open"
+    author: str = ""
+    comments: int = 0
+    created_at: str = ""
+
+
+class WorkflowRun(sdl.Entity):
+    run_number: int = 0
+    workflow_name: str = ""
+    conclusion: str = ""
+    branch: str = ""
+    event: str = ""
+    created_at: str = ""
