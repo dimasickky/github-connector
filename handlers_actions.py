@@ -7,7 +7,7 @@ later, once read-only visibility is proven end-to-end).
 """
 from imperal_sdk import ActionResult, sdl
 from app import chat
-from models import WorkflowRunsParams, WorkflowRun
+from models import WorkflowRunsParams, TriggerWorkflowParams, WorkflowRun, WorkflowDispatchResult
 from handlers_repos import _get_token, _split_repo
 import github_client
 
@@ -45,4 +45,40 @@ async def get_workflow_runs(ctx, params: WorkflowRunsParams) -> ActionResult:
     return ActionResult.success(
         sdl.EntityList[WorkflowRun](items=runs),
         summary=f"{len(runs)} workflow run(s) in {params.repo}",
+    )
+
+
+@chat.function(
+    "trigger_workflow_dispatch",
+    description=(
+        "Trigger an existing GitHub Actions workflow in a connected repository — the workflow must already "
+        "declare a workflow_dispatch trigger (this doesn't create or modify workflows, only runs one that's "
+        "already there). This is the 'deploy from chat' path: it runs whatever CI/CD the user already set up."
+    ),
+    action_type="write",
+    chain_callable=True,
+    data_model=WorkflowDispatchResult,
+    effects=["github.trigger_workflow"],
+    event="github-connector-extension.trigger_workflow_dispatch",
+)
+async def trigger_workflow_dispatch(ctx, params: TriggerWorkflowParams) -> ActionResult:
+    """Dispatch a workflow_dispatch event on an existing workflow file/ID."""
+    token, err = await _get_token(ctx)
+    if err:
+        return err
+
+    owner, name = _split_repo(params.repo)
+    resp = await github_client.gh_post(
+        ctx, token, f"/repos/{owner}/{name}/actions/workflows/{params.workflow}/dispatches",
+        json_body={"ref": params.ref, "inputs": params.inputs},
+    )
+    if resp.status_code >= 400:
+        return ActionResult.error(github_client.gh_error_message(resp.status_code), retryable=True)
+
+    return ActionResult.success(
+        WorkflowDispatchResult(
+            id=params.workflow, title=f"{params.workflow} @ {params.ref}", kind="workflow_dispatch",
+            workflow=params.workflow, ref=params.ref,
+        ),
+        summary=f"Triggered workflow '{params.workflow}' on {params.ref} in {params.repo}.",
     )

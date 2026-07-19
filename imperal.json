@@ -2028,6 +2028,142 @@
       "owner_chat_tool": "github-connector"
     },
     {
+      "name": "trigger_workflow_dispatch",
+      "description": "Trigger an existing GitHub Actions workflow in a connected repository — the workflow must already declare a workflow_dispatch trigger (this doesn't create or modify workflows, only runs one that's already there). This is the 'deploy from chat' path: it runs whatever CI/CD the user already set up.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "github.trigger_workflow"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "workflow": {
+            "description": "Workflow file name (e.g. 'deploy.yml') or numeric workflow ID — from get_workflow_runs",
+            "title": "Workflow",
+            "type": "string"
+          },
+          "ref": {
+            "default": "main",
+            "description": "Branch or tag to run the workflow on",
+            "title": "Ref",
+            "type": "string"
+          },
+          "inputs": {
+            "additionalProperties": true,
+            "description": "Workflow input parameters, matching the workflow_dispatch inputs it declares",
+            "title": "Inputs",
+            "type": "object"
+          }
+        },
+        "required": [
+          "repo",
+          "workflow"
+        ],
+        "title": "TriggerWorkflowParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "workflow": {
+            "default": "",
+            "title": "Workflow",
+            "type": "string"
+          },
+          "ref": {
+            "default": "",
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "WorkflowDispatchResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "github-connector-extension.trigger_workflow_dispatch",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
       "name": "create_branch",
       "description": "Create a new branch in a connected GitHub repository, from an existing branch/tag/commit (defaults to the repo's default branch).",
       "action_type": "write",

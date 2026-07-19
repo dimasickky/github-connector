@@ -186,3 +186,17 @@ class DestructiveActionResult(sdl.Entity):
     action: str = ""
     needs_confirmation: bool = False
     output: str = ""
+
+
+# ── P6: trigger existing CI/CD (workflow_dispatch) ──────────────────────── #
+
+class TriggerWorkflowParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    workflow: str = Field(description="Workflow file name (e.g. 'deploy.yml') or numeric workflow ID — from get_workflow_runs")
+    ref: str = Field(default="main", description="Branch or tag to run the workflow on")
+    inputs: dict = Field(default_factory=dict, description="Workflow input parameters, matching the workflow_dispatch inputs it declares")
+
+
+class WorkflowDispatchResult(sdl.Entity):
+    workflow: str = ""
+    ref: str = ""
