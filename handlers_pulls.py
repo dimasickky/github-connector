@@ -6,7 +6,7 @@ not built in this pass (per extensions/github-connector.md §12).
 """
 from imperal_sdk import ActionResult, sdl
 from app import chat
-from models import ListPullsParams, PullRequest
+from models import ListPullsParams, CreatePullRequestParams, PullRequest
 from handlers_repos import _get_token, _split_repo
 import github_client
 
@@ -45,3 +45,35 @@ async def list_pull_requests(ctx, params: ListPullsParams) -> ActionResult:
         sdl.EntityList[PullRequest](items=pulls),
         summary=f"{len(pulls)} pull request(s) ({params.state}) in {params.repo}",
     )
+
+
+@chat.function(
+    "create_pull_request",
+    description="Open a new pull request in a connected GitHub repository (head branch into base branch).",
+    action_type="write",
+    data_model=PullRequest,
+    effects=["github.create_pull_request"],
+    event="github-connector-extension.create_pull_request",
+)
+async def create_pull_request(ctx, params: CreatePullRequestParams) -> ActionResult:
+    """Open a pull request from an existing head branch into an existing base branch."""
+    token, err = await _get_token(ctx)
+    if err:
+        return err
+
+    owner, name = _split_repo(params.repo)
+    resp = await github_client.gh_post(
+        ctx, token, f"/repos/{owner}/{name}/pulls",
+        json_body={"title": params.title, "head": params.head, "base": params.base, "body": params.body},
+    )
+    if resp.status_code >= 400:
+        return ActionResult.error(github_client.gh_error_message(resp.status_code), retryable=True)
+
+    pr = resp.json()
+    result = PullRequest(
+        id=pr["number"], title=pr["title"], kind="pull_request",
+        number=pr["number"], state=pr["state"], author=(pr.get("user") or {}).get("login", ""),
+        base=(pr.get("base") or {}).get("ref", ""), head=(pr.get("head") or {}).get("ref", ""),
+        draft=pr.get("draft", False), created_at=pr.get("created_at", ""), url=pr.get("html_url", ""),
+    )
+    return ActionResult.success(result, summary=f"Opened PR #{pr['number']} in {params.repo}: {params.head} -> {params.base}")

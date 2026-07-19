@@ -107,3 +107,55 @@ class WorkflowRun(sdl.Entity):
     branch: str = ""
     event: str = ""
     created_at: str = ""
+
+
+# ── P4: write tools (non-destructive: create, never merge/close/delete) ──── #
+
+class CreateBranchParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    name: str = Field(description="New branch name, e.g. 'feature/my-change'")
+    from_ref: str = Field(default="", description="Branch, tag, or commit SHA to branch from. Empty = the repo's default branch.")
+
+
+class CreateOrUpdateFileParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    path: str = Field(description="File path within the repo, e.g. 'src/app.py'")
+    content: str = Field(description="New full file content (plain text — encoded to base64 internally)")
+    message: str = Field(description="Commit message")
+    branch: str = Field(description="Branch to commit to, e.g. 'main' or a feature branch")
+
+
+class CreatePullRequestParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    title: str = Field(description="Pull request title")
+    head: str = Field(description="Branch containing the changes")
+    base: str = Field(description="Branch to merge into, e.g. 'main'")
+    body: str = Field(default="", description="Pull request description")
+
+
+class CreateIssueParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    title: str = Field(description="Issue title")
+    body: str = Field(default="", description="Issue description")
+
+
+class CommentParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    number: int = Field(description="Issue or pull request number")
+    body: str = Field(description="Comment text (markdown supported)")
+
+
+class Branch(sdl.Entity):
+    ref: str = ""
+    sha: str = ""
+
+
+class CommitResult(sdl.Entity):
+    sha: str = ""
+    branch: str = ""
+
+
+class Comment(sdl.Entity):
+    author: str = ""
+    body: str = ""
+    created_at: str = ""

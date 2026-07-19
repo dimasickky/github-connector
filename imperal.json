@@ -920,6 +920,173 @@
       "owner_chat_tool": "github-connector"
     },
     {
+      "name": "create_pull_request",
+      "description": "Open a new pull request in a connected GitHub repository (head branch into base branch).",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "github.create_pull_request"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "title": {
+            "description": "Pull request title",
+            "title": "Title",
+            "type": "string"
+          },
+          "head": {
+            "description": "Branch containing the changes",
+            "title": "Head",
+            "type": "string"
+          },
+          "base": {
+            "description": "Branch to merge into, e.g. 'main'",
+            "title": "Base",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "description": "Pull request description",
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo",
+          "title",
+          "head",
+          "base"
+        ],
+        "title": "CreatePullRequestParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "number": {
+            "default": 0,
+            "title": "Number",
+            "type": "integer"
+          },
+          "state": {
+            "default": "open",
+            "title": "State",
+            "type": "string"
+          },
+          "author": {
+            "default": "",
+            "title": "Author",
+            "type": "string"
+          },
+          "base": {
+            "default": "",
+            "title": "Base",
+            "type": "string"
+          },
+          "head": {
+            "default": "",
+            "title": "Head",
+            "type": "string"
+          },
+          "draft": {
+            "default": false,
+            "title": "Draft",
+            "type": "boolean"
+          },
+          "created_at": {
+            "default": "",
+            "title": "Created At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PullRequest",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "github-connector-extension.create_pull_request",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
       "name": "list_issues",
       "description": "List issues on a connected GitHub repository (open by default). Pull requests are excluded — use list_pull_requests for those.",
       "action_type": "read",
@@ -1113,6 +1280,286 @@
       "owner_chat_tool": "github-connector"
     },
     {
+      "name": "create_issue",
+      "description": "Open a new issue in a connected GitHub repository.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "github.create_issue"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "title": {
+            "description": "Issue title",
+            "title": "Title",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "description": "Issue description",
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo",
+          "title"
+        ],
+        "title": "CreateIssueParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "number": {
+            "default": 0,
+            "title": "Number",
+            "type": "integer"
+          },
+          "state": {
+            "default": "open",
+            "title": "State",
+            "type": "string"
+          },
+          "author": {
+            "default": "",
+            "title": "Author",
+            "type": "string"
+          },
+          "comments": {
+            "default": 0,
+            "title": "Comments",
+            "type": "integer"
+          },
+          "created_at": {
+            "default": "",
+            "title": "Created At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Issue",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "github-connector-extension.create_issue",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
+      "name": "comment_on_issue_or_pr",
+      "description": "Add a comment to an existing issue or pull request (GitHub treats PR comments the same way as issue comments).",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "github.create_comment"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "number": {
+            "description": "Issue or pull request number",
+            "title": "Number",
+            "type": "integer"
+          },
+          "body": {
+            "description": "Comment text (markdown supported)",
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo",
+          "number",
+          "body"
+        ],
+        "title": "CommentParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "author": {
+            "default": "",
+            "title": "Author",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "title": "Body",
+            "type": "string"
+          },
+          "created_at": {
+            "default": "",
+            "title": "Created At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Comment",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "github-connector-extension.comment_on_issue_or_pr",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
       "name": "get_workflow_runs",
       "description": "List recent GitHub Actions workflow runs for a connected repository — status, conclusion, and branch of each.",
       "action_type": "read",
@@ -1299,6 +1746,278 @@
         "x-sdl": "entity-list"
       },
       "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
+      "name": "create_branch",
+      "description": "Create a new branch in a connected GitHub repository, from an existing branch/tag/commit (defaults to the repo's default branch).",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "github.create_branch"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "name": {
+            "description": "New branch name, e.g. 'feature/my-change'",
+            "title": "Name",
+            "type": "string"
+          },
+          "from_ref": {
+            "default": "",
+            "description": "Branch, tag, or commit SHA to branch from. Empty = the repo's default branch.",
+            "title": "From Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo",
+          "name"
+        ],
+        "title": "CreateBranchParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "ref": {
+            "default": "",
+            "title": "Ref",
+            "type": "string"
+          },
+          "sha": {
+            "default": "",
+            "title": "Sha",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Branch",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "github-connector-extension.create_branch",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
+      "name": "create_or_update_file",
+      "description": "Create or update a single file in a connected GitHub repository — this IS a commit (one file per call).",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "github.commit_file"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "path": {
+            "description": "File path within the repo, e.g. 'src/app.py'",
+            "title": "Path",
+            "type": "string"
+          },
+          "content": {
+            "description": "New full file content (plain text — encoded to base64 internally)",
+            "title": "Content",
+            "type": "string"
+          },
+          "message": {
+            "description": "Commit message",
+            "title": "Message",
+            "type": "string"
+          },
+          "branch": {
+            "description": "Branch to commit to, e.g. 'main' or a feature branch",
+            "title": "Branch",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo",
+          "path",
+          "content",
+          "message",
+          "branch"
+        ],
+        "title": "CreateOrUpdateFileParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "sha": {
+            "default": "",
+            "title": "Sha",
+            "type": "string"
+          },
+          "branch": {
+            "default": "",
+            "title": "Branch",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "CommitResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "github-connector-extension.create_or_update_file",
       "background": false,
       "long_running": false,
       "scopes": [],

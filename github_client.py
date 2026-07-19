@@ -106,6 +106,21 @@ async def gh_patch(ctx, token: str, path: str, json_body: dict | None = None):
     )
 
 
+async def gh_put(ctx, token: str, path: str, json_body: dict | None = None):
+    """PUT — GitHub uses this (not PATCH) for a few write endpoints that are
+    conceptually 'create or replace', notably create/update file contents and
+    merge pull request."""
+    return await ctx.http.put(
+        f"{_GITHUB_API}{path}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+        json=json_body or {},
+    )
+
+
 async def gh_delete(ctx, token: str, path: str):
     return await ctx.http.delete(
         f"{_GITHUB_API}{path}",
