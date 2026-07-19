@@ -1,16 +1,16 @@
-"""github-connector · P4 write tools — branches and file commits.
+"""github-connector · content tools — branches and file commits.
 
-create_branch and create_or_update_file are the two non-destructive write
-operations that don't touch anything that already exists (create_branch
-only ever adds a new ref; create_or_update_file only ever adds a new commit
-on a branch the caller names). Nothing here can merge, close, or delete —
-those stay in P5 with their own confirm flow (per extensions/github-connector.md §11).
+create_branch and create_or_update_file (P4, write, non-destructive) only
+ever add a new ref or a new commit — they never touch anything that already
+exists. delete_branch (P5, destructive) is the one tool here that removes
+something, so it carries its own two-step confirm flow, same pattern as
+merge_pull_request / close_pull_request_or_issue.
 """
 import base64
 
 from imperal_sdk import ActionResult, sdl
 from app import chat
-from models import CreateBranchParams, CreateOrUpdateFileParams, Branch, CommitResult
+from models import CreateBranchParams, CreateOrUpdateFileParams, DeleteBranchParams, Branch, CommitResult, DestructiveActionResult
 from handlers_repos import _get_token, _split_repo
 import github_client
 
@@ -94,3 +94,54 @@ async def create_or_update_file(ctx, params: CreateOrUpdateFileParams) -> Action
     result = CommitResult(id=commit_sha, title=params.message, kind="commit",
                           sha=commit_sha, branch=params.branch)
     return ActionResult.success(result, summary=f"Committed '{params.message}' to {params.branch} in {params.repo}")
+
+
+@chat.function(
+    "delete_branch",
+    description=(
+        "Delete a branch in a connected GitHub repository. Irreversible if the branch has no other pointer to it, "
+        "so it requires an explicit confirm=true on a second call — the first call only previews the deletion."
+    ),
+    action_type="destructive",
+    data_model=DestructiveActionResult,
+    effects=["github.delete_branch"],
+    event="github-connector-extension.delete_branch",
+)
+async def delete_branch(ctx, params: DeleteBranchParams) -> ActionResult:
+    """Delete a branch ref. Own explicit two-step confirm-flow (same pattern
+    as merge_pull_request / close_pull_request_or_issue)."""
+    token, err = await _get_token(ctx)
+    if err:
+        return err
+
+    owner, name = _split_repo(params.repo)
+
+    if not params.confirm:
+        await ctx.log(
+            f"delete_branch: preview only (awaiting confirm) — '{params.branch}' in {params.repo}",
+            level="info",
+        )
+        return ActionResult.success(
+            DestructiveActionResult(
+                id=params.branch, title=params.branch, kind="branch",
+                action="delete", needs_confirmation=True,
+            ),
+            summary=(
+                f"This will delete branch '{params.branch}' in {params.repo} — irreversible. "
+                "Call again with confirm=true to actually delete it."
+            ),
+        )
+
+    resp = await github_client.gh_delete(ctx, token, f"/repos/{owner}/{name}/git/refs/heads/{params.branch}")
+    if resp.status_code >= 400:
+        await ctx.log(f"delete_branch: GitHub rejected delete of '{params.branch}' in {params.repo}", level="error")
+        return ActionResult.error(github_client.gh_error_message(resp.status_code), retryable=True)
+
+    await ctx.log(f"delete_branch: deleted '{params.branch}' in {params.repo}", level="info")
+    return ActionResult.success(
+        DestructiveActionResult(
+            id=params.branch, title=params.branch, kind="branch",
+            action="delete", needs_confirmation=False,
+        ),
+        summary=f"Deleted branch '{params.branch}' in {params.repo}.",
+    )

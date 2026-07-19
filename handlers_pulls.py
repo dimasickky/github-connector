@@ -6,7 +6,7 @@ not built in this pass (per extensions/github-connector.md §12).
 """
 from imperal_sdk import ActionResult, sdl
 from app import chat
-from models import ListPullsParams, CreatePullRequestParams, PullRequest
+from models import ListPullsParams, CreatePullRequestParams, MergePullRequestParams, PullRequest, DestructiveActionResult
 from handlers_repos import _get_token, _split_repo
 import github_client
 
@@ -77,3 +77,65 @@ async def create_pull_request(ctx, params: CreatePullRequestParams) -> ActionRes
         draft=pr.get("draft", False), created_at=pr.get("created_at", ""), url=pr.get("html_url", ""),
     )
     return ActionResult.success(result, summary=f"Opened PR #{pr['number']} in {params.repo}: {params.head} -> {params.base}")
+
+
+@chat.function(
+    "merge_pull_request",
+    description=(
+        "Merge an open pull request in a connected GitHub repository. This is irreversible on GitHub's side, "
+        "so it requires an explicit confirm=true on a second call — the first call only previews the merge."
+    ),
+    action_type="destructive",
+    data_model=DestructiveActionResult,
+    effects=["github.merge_pull_request"],
+    event="github-connector-extension.merge_pull_request",
+)
+async def merge_pull_request(ctx, params: MergePullRequestParams) -> ActionResult:
+    """Merge a pull request via merge/squash/rebase.
+
+    Own explicit two-step confirm-flow (same pattern as wp-site-connector's
+    manage_plugin): the first call (confirm=false, the default) returns a
+    preview and performs no change; the caller must re-call with
+    confirm=true to actually merge. This does NOT rely on the platform's
+    confirmation gate (account-level, off by default, not controllable by
+    an extension — see extensions/github-connector.md §11).
+    """
+    token, err = await _get_token(ctx)
+    if err:
+        return err
+
+    owner, name = _split_repo(params.repo)
+
+    if not params.confirm:
+        await ctx.log(
+            f"merge_pull_request: preview only (awaiting confirm) — #{params.number} in {params.repo}",
+            level="info",
+        )
+        return ActionResult.success(
+            DestructiveActionResult(
+                id=str(params.number), title=f"PR #{params.number}", kind="pull_request",
+                action="merge", needs_confirmation=True,
+            ),
+            summary=(
+                f"This will merge PR #{params.number} in {params.repo} ({params.method}) — irreversible. "
+                "Call again with confirm=true to actually merge it."
+            ),
+        )
+
+    resp = await github_client.gh_put(
+        ctx, token, f"/repos/{owner}/{name}/pulls/{params.number}/merge",
+        json_body={"merge_method": params.method},
+    )
+    if resp.status_code >= 400:
+        await ctx.log(f"merge_pull_request: GitHub rejected merge of #{params.number} in {params.repo}", level="error")
+        return ActionResult.error(github_client.gh_error_message(resp.status_code), retryable=True)
+
+    await ctx.log(f"merge_pull_request: merged #{params.number} in {params.repo}", level="info")
+    data = resp.json()
+    return ActionResult.success(
+        DestructiveActionResult(
+            id=str(params.number), title=f"PR #{params.number}", kind="pull_request",
+            action="merge", needs_confirmation=False, output=data.get("sha", ""),
+        ),
+        summary=f"Merged PR #{params.number} in {params.repo}.",
+    )

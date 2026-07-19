@@ -1087,6 +1087,147 @@
       "owner_chat_tool": "github-connector"
     },
     {
+      "name": "merge_pull_request",
+      "description": "Merge an open pull request in a connected GitHub repository. This is irreversible on GitHub's side, so it requires an explicit confirm=true on a second call — the first call only previews the merge.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "github.merge_pull_request"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "number": {
+            "description": "Pull request number",
+            "title": "Number",
+            "type": "integer"
+          },
+          "method": {
+            "default": "merge",
+            "description": "'merge', 'squash', or 'rebase'",
+            "title": "Method",
+            "type": "string"
+          },
+          "confirm": {
+            "default": false,
+            "description": "Set true on a second call to actually merge. First call (default) only previews.",
+            "title": "Confirm",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "repo",
+          "number"
+        ],
+        "title": "MergePullRequestParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "action": {
+            "default": "",
+            "title": "Action",
+            "type": "string"
+          },
+          "needs_confirmation": {
+            "default": false,
+            "title": "Needs Confirmation",
+            "type": "boolean"
+          },
+          "output": {
+            "default": "",
+            "title": "Output",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "DestructiveActionResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "github-connector-extension.merge_pull_request",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
       "name": "list_issues",
       "description": "List issues on a connected GitHub repository (open by default). Pull requests are excluded — use list_pull_requests for those.",
       "action_type": "read",
@@ -1560,6 +1701,141 @@
       "owner_chat_tool": "github-connector"
     },
     {
+      "name": "close_pull_request_or_issue",
+      "description": "Close an open pull request or issue in a connected GitHub repository (without merging). Requires an explicit confirm=true on a second call — the first call only previews the close.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "github.close_issue_or_pr"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "number": {
+            "description": "Issue or pull request number",
+            "title": "Number",
+            "type": "integer"
+          },
+          "confirm": {
+            "default": false,
+            "description": "Set true on a second call to actually close. First call (default) only previews.",
+            "title": "Confirm",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "repo",
+          "number"
+        ],
+        "title": "CloseParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "action": {
+            "default": "",
+            "title": "Action",
+            "type": "string"
+          },
+          "needs_confirmation": {
+            "default": false,
+            "title": "Needs Confirmation",
+            "type": "boolean"
+          },
+          "output": {
+            "default": "",
+            "title": "Output",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "DestructiveActionResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "github-connector-extension.close_pull_request_or_issue",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
       "name": "get_workflow_runs",
       "description": "List recent GitHub Actions workflow runs for a connected repository — status, conclusion, and branch of each.",
       "action_type": "read",
@@ -2018,6 +2294,141 @@
         "x-sdl": "entity"
       },
       "event": "github-connector-extension.create_or_update_file",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
+      "name": "delete_branch",
+      "description": "Delete a branch in a connected GitHub repository. Irreversible if the branch has no other pointer to it, so it requires an explicit confirm=true on a second call — the first call only previews the deletion.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "github.delete_branch"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "branch": {
+            "description": "Branch name to delete",
+            "title": "Branch",
+            "type": "string"
+          },
+          "confirm": {
+            "default": false,
+            "description": "Set true on a second call to actually delete. First call (default) only previews.",
+            "title": "Confirm",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "repo",
+          "branch"
+        ],
+        "title": "DeleteBranchParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "action": {
+            "default": "",
+            "title": "Action",
+            "type": "string"
+          },
+          "needs_confirmation": {
+            "default": false,
+            "title": "Needs Confirmation",
+            "type": "boolean"
+          },
+          "output": {
+            "default": "",
+            "title": "Output",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "DestructiveActionResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "github-connector-extension.delete_branch",
       "background": false,
       "long_running": false,
       "scopes": [],

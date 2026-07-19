@@ -159,3 +159,30 @@ class Comment(sdl.Entity):
     author: str = ""
     body: str = ""
     created_at: str = ""
+
+
+# ── P5: destructive tools (merge/close/delete) — own two-step confirm flow ── #
+
+class MergePullRequestParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    number: int = Field(description="Pull request number")
+    method: str = Field(default="merge", description="'merge', 'squash', or 'rebase'")
+    confirm: bool = Field(default=False, description="Set true on a second call to actually merge. First call (default) only previews.")
+
+
+class CloseParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    number: int = Field(description="Issue or pull request number")
+    confirm: bool = Field(default=False, description="Set true on a second call to actually close. First call (default) only previews.")
+
+
+class DeleteBranchParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    branch: str = Field(description="Branch name to delete")
+    confirm: bool = Field(default=False, description="Set true on a second call to actually delete. First call (default) only previews.")
+
+
+class DestructiveActionResult(sdl.Entity):
+    action: str = ""
+    needs_confirmation: bool = False
+    output: str = ""
