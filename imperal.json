@@ -1,0 +1,802 @@
+{
+  "manifest_schema_version": 3,
+  "sdk_version": "5.9.9",
+  "app_id": "github-connector-extension",
+  "version": "0.1.0",
+  "name": "GitHub Connector",
+  "description": "Browse your GitHub repositories, view code and commit history, and manage pull requests and issues directly from chat.",
+  "icon": "icon.svg",
+  "actions_explicit": true,
+  "system": false,
+  "capabilities": [
+    "vcs:read",
+    "vcs:write",
+    "vcs:merge",
+    "ci:trigger",
+    "auth:oauth"
+  ],
+  "tools": [
+    {
+      "name": "start_github_install",
+      "description": "Get the link to connect GitHub — opens GitHub's own installation page where you pick which repositories to grant access to. Use this when the user wants to connect/link their GitHub account.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {},
+        "title": "_NoParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "install_url": {
+            "description": "Open this URL to install/authorize the GitHub App on your chosen repositories",
+            "title": "Install Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "install_url"
+        ],
+        "title": "StartInstallResult",
+        "type": "object"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
+      "name": "list_repositories",
+      "description": "List the GitHub repositories this account's App installation has access to.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {},
+        "title": "_NoParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "Repository": {
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "full_name": {
+                "default": "",
+                "title": "Full Name",
+                "type": "string"
+              },
+              "private": {
+                "default": false,
+                "title": "Private",
+                "type": "boolean"
+              },
+              "default_branch": {
+                "default": "main",
+                "title": "Default Branch",
+                "type": "string"
+              },
+              "stars": {
+                "default": 0,
+                "title": "Stars",
+                "type": "integer"
+              },
+              "language": {
+                "default": "",
+                "title": "Language",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "Repository",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/Repository"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[Repository]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
+      "name": "get_file_contents",
+      "description": "Read a file's content, or list a directory's entries, from a GitHub repository at a given ref (branch/tag/commit). Pass path='' for the repo root.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "path": {
+            "description": "File or directory path within the repo, e.g. 'src/app.py'. Empty string = repo root.",
+            "title": "Path",
+            "type": "string"
+          },
+          "ref": {
+            "default": "",
+            "description": "Branch, tag, or commit SHA. Empty = the repo's default branch.",
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo",
+          "path"
+        ],
+        "title": "FileContentsParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "path": {
+            "default": "",
+            "title": "Path",
+            "type": "string"
+          },
+          "ref": {
+            "default": "",
+            "title": "Ref",
+            "type": "string"
+          },
+          "encoding": {
+            "default": "utf-8",
+            "title": "Encoding",
+            "type": "string"
+          },
+          "content": {
+            "default": "",
+            "title": "Content",
+            "type": "string"
+          },
+          "size": {
+            "default": 0,
+            "title": "Size",
+            "type": "integer"
+          },
+          "sha": {
+            "default": "",
+            "title": "Sha",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "FileContent",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
+      "name": "list_recent_commits",
+      "description": "List recent commits on a GitHub repository, optionally filtered to those touching a specific path.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "path": {
+            "default": "",
+            "description": "Optional: only commits touching this file/path",
+            "title": "Path",
+            "type": "string"
+          },
+          "limit": {
+            "default": 20,
+            "description": "Max commits to return, 1-100",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "title": "ListCommitsParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "Commit": {
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "default": "",
+                "title": "Url",
+                "type": "string"
+              },
+              "sha": {
+                "default": "",
+                "title": "Sha",
+                "type": "string"
+              },
+              "message": {
+                "default": "",
+                "title": "Message",
+                "type": "string"
+              },
+              "author": {
+                "default": "",
+                "title": "Author",
+                "type": "string"
+              },
+              "date": {
+                "default": "",
+                "title": "Date",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "Commit",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/Commit"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[Commit]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
+      "name": "list_contributors",
+      "description": "List contributors to a GitHub repository, ranked by number of commits.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo' — from list_repositories",
+            "title": "Repo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "title": "RepoParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "Contributor": {
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "login": {
+                "default": "",
+                "title": "Login",
+                "type": "string"
+              },
+              "contributions": {
+                "default": 0,
+                "title": "Contributions",
+                "type": "integer"
+              },
+              "avatar_url": {
+                "default": "",
+                "title": "Avatar Url",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "Contributor",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/Contributor"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[Contributor]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    }
+  ],
+  "signals": [],
+  "schedules": [],
+  "required_scopes": [],
+  "icon_size_bytes": 518,
+  "webhooks": [
+    {
+      "path": "/install_callback",
+      "method": "GET",
+      "secret_header": ""
+    }
+  ],
+  "lifecycle": {
+    "health_check": {
+      "interval_sec": 60
+    }
+  },
+  "secrets": [
+    {
+      "name": "github_app_slug",
+      "description": "The GitHub App's URL slug, e.g. 'webbee-imperal' for github.com/apps/webbee-imperal — shown in the App's settings URL on github.com. Public by nature (it's part of a public URL), but declared as a secret for consistency with the rest of the App's identity and to keep it configurable without a code change.",
+      "required": true,
+      "write_mode": "user",
+      "max_bytes": 128,
+      "scope": "app"
+    },
+    {
+      "name": "github_app_id",
+      "description": "Numeric GitHub App ID, shown at the top of the App's settings page on github.com (Developer settings → GitHub Apps → your app).",
+      "required": true,
+      "write_mode": "user",
+      "max_bytes": 32,
+      "scope": "app"
+    },
+    {
+      "name": "github_app_private_key",
+      "description": "PEM-encoded private key generated for the GitHub App (Developer settings → GitHub Apps → your app → Private keys → Generate a private key). Used to sign short-lived JWTs that are exchanged for per-installation access tokens — never sent to GitHub directly, never logged, never returned to chat.",
+      "required": true,
+      "write_mode": "user",
+      "max_bytes": 8192,
+      "scope": "app"
+    },
+    {
+      "name": "github_webhook_secret",
+      "description": "Shared secret configured in the GitHub App's Webhook settings, used to verify that incoming setup-callback requests really come from GitHub (HMAC-SHA256 signature check) before trusting them.",
+      "required": false,
+      "write_mode": "user",
+      "max_bytes": 256,
+      "scope": "app"
+    }
+  ],
+  "panels": [
+    {
+      "panel_id": "secrets",
+      "slot": "right",
+      "title": "Secrets",
+      "tree": {},
+      "icon": "KeyRound",
+      "refresh": "manual",
+      "center_overlay": false
+    },
+    {
+      "panel_id": "sidebar",
+      "slot": "left",
+      "title": "GitHub",
+      "tree": {},
+      "icon": "",
+      "refresh": "on_event:github-connector.install_connected,github-connector.install_disconnected",
+      "center_overlay": false,
+      "default_width": 280,
+      "min_width": 200,
+      "max_width": 400
+    },
+    {
+      "panel_id": "center",
+      "slot": "center",
+      "title": "GitHub Connector",
+      "tree": {},
+      "icon": "",
+      "refresh": "manual",
+      "center_overlay": true
+    }
+  ]
+}
