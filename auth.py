@@ -42,6 +42,23 @@ class StartInstallResult(BaseModel):
     install_url: str = Field(description="Open this URL to install/authorize the GitHub App on your chosen repositories")
 
 
+async def create_install_url(ctx) -> str:
+    """Create a one-shot state and return the matching GitHub App install URL.
+
+    Shared by the chat function and the sidebar. Panel buttons must receive a
+    concrete ``ui.Open(url)`` action at render time: a panel ``ui.Call`` only
+    displays the returned ActionResult summary as a toast and does not execute
+    UI actions nested in that result.
+    """
+    app_slug = await ctx.secrets.get("github_app_slug")
+    if not app_slug:
+        return ""
+
+    state = _secrets_mod.token_urlsafe(24)
+    await storage.save_oauth_state(ctx, state, ctx.user.imperal_id)
+    return f"https://github.com/apps/{app_slug}/installations/new?state={state}"
+
+
 @chat.function(
     "start_github_install",
     description=(
@@ -56,18 +73,14 @@ async def start_github_install(ctx, params: _NoParams) -> ActionResult:
     """Generate a one-shot state token and return the GitHub App's public
     install URL. Does not touch any GitHub API — this is a pure redirect
     link, the actual installation happens on GitHub's own UI."""
-    app_slug = await ctx.secrets.get("github_app_slug")
-    if not app_slug:
+    install_url = await create_install_url(ctx)
+    if not install_url:
         return ActionResult.error(
             "GitHub App is not configured yet (github_app_slug secret missing) — "
             "the developer needs to finish registering the GitHub App first.",
             code=INTERNAL,
         )
 
-    state = _secrets_mod.token_urlsafe(24)
-    await storage.save_oauth_state(ctx, state, ctx.user.imperal_id)
-
-    install_url = f"https://github.com/apps/{app_slug}/installations/new?state={state}"
     return ActionResult.success(
         data={"install_url": install_url},
         summary=(

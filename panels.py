@@ -8,6 +8,7 @@ later additions — not built in this pass.
 from imperal_sdk import ui
 
 from app import ext
+import auth
 import storage
 
 
@@ -24,13 +25,18 @@ async def sidebar(ctx, **kwargs):
     installation = await storage.get_installation(ctx)
 
     if not installation:
-        return ui.Stack(gap=3, children=[
-            ui.Empty(message="No GitHub account connected yet."),
-            ui.Button(
+        install_url = await auth.create_install_url(ctx)
+        children = [ui.Empty(message="No GitHub account connected yet.")]
+        if install_url:
+            children.append(ui.Button(
                 "Connect GitHub", icon="Github", variant="primary",
-                on_click=ui.Call("start_github_install"),
-            ),
-        ])
+                on_click=ui.Open(install_url),
+            ))
+        else:
+            children.append(ui.Text(
+                "GitHub App configuration is incomplete. Contact the extension developer."
+            ))
+        return ui.Stack(gap=3, children=children)
 
     repos = installation.get("repositories", [])
     account = installation.get("account_login", "")

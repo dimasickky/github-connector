@@ -10,6 +10,7 @@ import pytest
 from imperal_sdk.testing import MockContext
 
 import auth
+import panels
 import storage
 from tests.conftest import TEST_APP_SLUG
 
@@ -30,6 +31,19 @@ async def test_start_github_install_returns_link_with_state():
     # one-shot: second lookup must fail
     resolved_again = await storage.find_and_consume_oauth_state(ctx, state)
     assert resolved_again is None
+
+
+@pytest.mark.asyncio
+async def test_sidebar_connect_button_opens_github_directly():
+    ctx = MockContext(user_id="user-1")
+    tree = await panels.sidebar(ctx)
+    payload = tree.to_dict()
+
+    button = payload["props"]["children"][1]
+    action = button["props"]["on_click"]
+    assert action["action"] == "open"
+    assert TEST_APP_SLUG in action["url"]
+    assert "state=" in action["url"]
 
 
 @pytest.mark.asyncio
