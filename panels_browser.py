@@ -33,6 +33,7 @@ async def center(ctx, repo="", path="", ref="", **kwargs):
     data = resp.json()
 
     breadcrumb = _breadcrumb(repo, path, ref)
+    back_bar = _back_bar(repo, path, ref)
 
     if isinstance(data, list):
         # Directory listing. Tree nodes aren't independently clickable via
@@ -47,7 +48,8 @@ async def center(ctx, repo="", path="", ref="", **kwargs):
             for entry in sorted(data, key=lambda e: (e["type"] != "dir", e["name"]))
         ]
         body = ui.List(items=items) if items else ui.Empty(message="This directory is empty.")
-        return ui.Page(title=repo, subtitle=path or "/", children=[breadcrumb, body])
+        children = [breadcrumb, body] if not back_bar else [back_bar, breadcrumb, body]
+        return ui.Page(title=repo, subtitle=path or "/", children=children)
 
     # Single file.
     import base64
@@ -57,11 +59,24 @@ async def center(ctx, repo="", path="", ref="", **kwargs):
             content = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
         except Exception:
             content = "(binary file — cannot display)"
-    language = _guess_language(data.get("name", ""))
-    return ui.Page(title=data.get("name", path), subtitle=repo, children=[
-        breadcrumb,
-        ui.Code(content=content, language=language, line_numbers=True),
-    ])
+    language = github_client.guess_language(data.get("name", ""))
+    code_children = [breadcrumb, ui.Code(content=content, language=language, line_numbers=True)]
+    if back_bar:
+        code_children = [back_bar] + code_children
+    return ui.Page(title=data.get("name", path), subtitle=repo, children=code_children)
+
+
+def _back_bar(repo: str, path: str, ref: str):
+    """Explicit 'Back' button one directory level up — the breadcrumb alone
+    isn't a strong enough affordance (users look for a dedicated back
+    control), matching the ui.Button("Back", icon="ArrowLeft", ...) pattern
+    already used by sql-db/panels_editor.py and notes/panels.py. Hidden at
+    the repo root — there is nowhere higher to go."""
+    if not path:
+        return None
+    parent = path.rsplit("/", 1)[0] if "/" in path else ""
+    return ui.Button("Back", icon="ArrowLeft", variant="ghost", size="sm",
+                      on_click=ui.Call("__panel__center", repo=repo, path=parent, ref=ref))
 
 
 def _breadcrumb(repo: str, path: str, ref: str):
@@ -75,16 +90,3 @@ def _breadcrumb(repo: str, path: str, ref: str):
         crumbs.append(ui.Button(part, variant="ghost", size="sm",
                                 on_click=ui.Call("__panel__center", repo=repo, path=accum, ref=ref)))
     return ui.Stack(direction="h", gap=1, children=crumbs)
-
-
-_EXT_LANG = {
-    "py": "python", "js": "javascript", "ts": "typescript", "tsx": "typescript",
-    "jsx": "javascript", "json": "json", "md": "markdown", "yml": "yaml",
-    "yaml": "yaml", "html": "html", "css": "css", "sh": "bash", "rb": "ruby",
-    "go": "go", "rs": "rust", "java": "java", "php": "php", "sql": "sql",
-}
-
-
-def _guess_language(filename: str) -> str:
-    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-    return _EXT_LANG.get(ext, "")

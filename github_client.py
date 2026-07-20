@@ -17,6 +17,21 @@ import jwt as _pyjwt
 _GITHUB_API = "https://api.github.com"
 _JWT_TTL_SECONDS = 540  # GitHub caps this at 600s; 540 leaves clock-skew margin
 
+_EXT_LANG = {
+    "py": "python", "js": "javascript", "ts": "typescript", "tsx": "typescript",
+    "jsx": "javascript", "json": "json", "md": "markdown", "yml": "yaml",
+    "yaml": "yaml", "html": "html", "css": "css", "sh": "bash", "rb": "ruby",
+    "go": "go", "rs": "rust", "java": "java", "php": "php", "sql": "sql",
+}
+
+
+def guess_language(filename: str) -> str:
+    """Map a filename's extension to a Code component `language` hint.
+    Shared by handlers_repos.py (chat rendering) and panels_browser.py
+    (center panel) so both render the same syntax highlighting for a file."""
+    ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    return _EXT_LANG.get(ext, "")
+
 _ERROR_MESSAGES = {
     401: "GitHub rejected the installation token — the App installation may have been removed or its permissions changed.",
     403: "GitHub denied this request — the installation may not have permission for this repository/action, or GitHub's rate limit was hit.",

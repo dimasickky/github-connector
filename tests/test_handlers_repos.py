@@ -63,6 +63,11 @@ async def test_get_file_contents_file():
     assert result.status == "success"
     assert result.data.content == "print('hi')"
     assert result.data.sha == "abc123"
+    # A file must render as a proper syntax-highlighted code block in chat,
+    # not the raw FileContent dict.
+    assert result.ui is not None
+    assert result.ui.to_dict()["type"] == "Code"
+    assert result.ui.to_dict()["props"]["language"] == "python"
 
 
 @pytest.mark.asyncio
@@ -75,6 +80,9 @@ async def test_get_file_contents_directory():
         ctx, FileContentsParams(repo="octocat/hello-world", path=""))
     assert result.status == "success"
     assert result.data.kind == "gh_dir"
+    # A directory must render as a browsable list in chat, not raw JSON.
+    assert result.ui is not None
+    assert result.ui.to_dict()["type"] == "List"
 
 
 @pytest.mark.asyncio

@@ -10,7 +10,7 @@ shared prelude lives in `_get_token(ctx)` to avoid repeating it four times.
 """
 import base64
 
-from imperal_sdk import ActionResult, sdl
+from imperal_sdk import ActionResult, sdl, ui
 from app import chat
 from error_codes import GH_NOT_CONNECTED, GH_REPO_NOT_ACCESSIBLE, GH_FILE_NOT_FOUND
 from imperal_sdk.chat.error_codes import INTERNAL
@@ -109,7 +109,18 @@ async def get_file_contents(ctx, params: FileContentsParams) -> ActionResult:
             path=params.path, ref=params.ref, content="", size=0,
             description=f"Directory with {len(data)} entr{'y' if len(data)==1 else 'ies'}: {entries}",
         )
-        return ActionResult.success(result, summary=f"{len(data)} entries in {params.path or '/'}")
+        sorted_entries = sorted(data, key=lambda e: (e.get("type") != "dir", e.get("name", "")))
+        listing_ui = ui.List(items=[
+            ui.ListItem(
+                id=e.get("path", e.get("name", "")),
+                title=e.get("name", "") + ("/" if e.get("type") == "dir" else ""),
+                icon="Folder" if e.get("type") == "dir" else "File",
+            )
+            for e in sorted_entries[:50]
+        ])
+        return ActionResult.success(
+            result, summary=f"{len(data)} entries in {params.path or '/'}", ui=listing_ui,
+        )
 
     if data.get("type") != "file":
         return ActionResult.error(
@@ -127,7 +138,14 @@ async def get_file_contents(ctx, params: FileContentsParams) -> ActionResult:
         content=decoded, size=data.get("size", 0), sha=data.get("sha", ""),
         url=data.get("html_url", ""),
     )
-    return ActionResult.success(result, summary=f"{data.get('path', params.path)} ({data.get('size', 0)} bytes)")
+    code_ui = ui.Code(
+        content=decoded,
+        language=github_client.guess_language(data.get("name", params.path)),
+        line_numbers=True,
+    )
+    return ActionResult.success(
+        result, summary=f"{data.get('path', params.path)} ({data.get('size', 0)} bytes)", ui=code_ui,
+    )
 
 
 @chat.function(
