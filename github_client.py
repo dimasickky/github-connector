@@ -136,6 +136,24 @@ async def gh_put(ctx, token: str, path: str, json_body: dict | None = None):
     )
 
 
+async def gh_get_diff(ctx, token: str, path: str) -> tuple[str | None, int]:
+    """GET a GitHub endpoint requesting the unified-diff representation
+    (Accept: application/vnd.github.v3.diff) instead of JSON — used to show a
+    PR's diff before an irreversible merge. Returns (diff_text_or_None,
+    status_code); diff_text is None on a non-2xx response."""
+    resp = await ctx.http.get(
+        f"{_GITHUB_API}{path}",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github.v3.diff",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    if resp.status_code >= 400:
+        return None, resp.status_code
+    return resp.text(), resp.status_code
+
+
 async def gh_delete(ctx, token: str, path: str):
     return await ctx.http.delete(
         f"{_GITHUB_API}{path}",

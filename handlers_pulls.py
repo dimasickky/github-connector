@@ -4,7 +4,7 @@ Only `list_pull_requests` here (P3, read-only). Write/destructive PR actions
 (create_pull_request, merge_pull_request, close_pull_request) are P4/P5 —
 not built in this pass (per extensions/github-connector.md §12).
 """
-from imperal_sdk import ActionResult, sdl
+from imperal_sdk import ActionResult, sdl, ui
 from app import chat
 from models import ListPullsParams, CreatePullRequestParams, MergePullRequestParams, PullRequest, DestructiveActionResult
 from handlers_repos import _get_token, _split_repo
@@ -111,6 +111,16 @@ async def merge_pull_request(ctx, params: MergePullRequestParams) -> ActionResul
             f"merge_pull_request: preview only (awaiting confirm) — #{params.number} in {params.repo}",
             level="info",
         )
+        diff_text, diff_status = await github_client.gh_get_diff(
+            ctx, token, f"/repos/{owner}/{name}/pulls/{params.number}",
+        )
+        preview_ui = None
+        if diff_text:
+            MAX_DIFF_CHARS = 6000
+            shown = diff_text[:MAX_DIFF_CHARS]
+            if len(diff_text) > MAX_DIFF_CHARS:
+                shown += f"\n… diff truncated ({len(diff_text)} chars total) — review the full diff on GitHub before confirming."
+            preview_ui = ui.Code(shown, language="diff")
         return ActionResult.success(
             DestructiveActionResult(
                 id=str(params.number), title=f"PR #{params.number}", kind="pull_request",
@@ -119,7 +129,9 @@ async def merge_pull_request(ctx, params: MergePullRequestParams) -> ActionResul
             summary=(
                 f"This will merge PR #{params.number} in {params.repo} ({params.method}) — irreversible. "
                 "Call again with confirm=true to actually merge it."
+                + ("" if diff_text else " (Diff preview unavailable — GitHub did not return one.)")
             ),
+            ui=preview_ui,
         )
 
     resp = await github_client.gh_put(

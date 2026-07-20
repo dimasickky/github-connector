@@ -1,5 +1,20 @@
 # Changelog
 
+## v0.2.1 — 2026-07-20 — Diff preview before merge
+
+### Added
+
+- `merge_pull_request`'s preview call (confirm=false) now fetches and shows
+  the pull request's unified diff (`Accept: application/vnd.github.v3.diff`)
+  as a syntax-highlighted code block before you're asked to confirm — so
+  "irreversible" merges are no longer a blind confirmation. Truncated at
+  6000 chars with a note to review the full diff on GitHub for larger PRs.
+  Falls back gracefully (confirmation flow unaffected) if GitHub doesn't
+  return a diff for any reason.
+
+### Tests
+49/49 tests passing (48 existing + 1 new for the diff preview).
+
 ## v0.2.0 — 2026-07-20 — Disconnect/switch account, live GitHub notifications
 
 ### Added

@@ -39,6 +39,23 @@ async def test_merge_pull_request_preview_does_not_merge():
 
 
 @pytest.mark.asyncio
+async def test_merge_pull_request_preview_shows_diff():
+    ctx = await _seeded_ctx()
+    diff_body = "diff --git a/foo.py b/foo.py\n+added line\n"
+    ctx.http.mock_get("/pulls/5", {"raw": diff_body})
+    # MockHTTP.mock_get always JSON-encodes; patch response body directly to
+    # simulate the raw diff text GitHub returns for the diff Accept header.
+    ctx.http._mocks[-1] = ("GET", "/pulls/5", diff_body, 200, {})
+    result = await handlers_pulls.merge_pull_request(
+        ctx, MergePullRequestParams(repo="octocat/hello-world", number=5))
+    assert result.status == "success"
+    assert result.data.needs_confirmation is True
+    assert result.ui is not None
+    assert result.ui.to_dict()["type"] == "Code"
+    assert "added line" in result.ui.to_dict()["props"]["content"]
+
+
+@pytest.mark.asyncio
 async def test_merge_pull_request_confirmed_merges():
     ctx = await _seeded_ctx()
     ctx.http._mocks.append(("PUT", "/pulls/5/merge", {"merged": True, "sha": "abc123"}, 200, {}))

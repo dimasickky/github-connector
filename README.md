@@ -16,7 +16,7 @@
 | 📚 **Browse** | List repositories, read file contents at any path/ref, walk commit history, see top contributors |
 | 🗂️ **Center panel** | File-tree + code viewer for any connected repository, right inside the panel |
 | ✍️ **Write** | Create branches, commit file changes, open pull requests, open issues, comment on issues/PRs |
-| 🔀 **Merge & close** | Merge a pull request, close a pull request or issue — each requires an explicit second confirmation call, never a first-call surprise |
+| 🔀 **Merge & close** | Merge a pull request (with a diff preview shown before you confirm), close a pull request or issue — each requires an explicit second confirmation call, never a first-call surprise |
 | 🗑️ **Delete branch** | Same explicit two-step confirmation as merge/close |
 | 🚀 **Deploy** | Trigger an existing GitHub Actions `workflow_dispatch` — runs the CI/CD you already configured, doesn't invent its own |
 | 🔔 **Live notifications** | New issues, PRs opened, review requests, PR merges, failed CI runs, and pushes to the default branch push a notification the moment GitHub reports them — no need to ask |
