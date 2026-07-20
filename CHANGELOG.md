@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.2.0 — 2026-07-20 — Disconnect/switch account, live GitHub notifications
+
+### Added
+
+**Account management**
+- `disconnect_github` — removes the stored installation record (own explicit
+  two-step confirm flow, same pattern as merge/close/delete branch). GitHub's
+  own App installation is untouched — this only makes Imperal forget it.
+- Sidebar footer: "Switch account" (reopens GitHub's install/config page to
+  connect a different account or org) and "Disconnect" buttons.
+
+**Live notifications (real GitHub webhook events)**
+- New `@ext.webhook("events")` endpoint — signed POST deliveries from GitHub
+  (not to be confused with `install_callback`, the unsigned GET redirect from
+  the install-page flow). Verifies `X-Hub-Signature-256` HMAC-SHA256 with a
+  constant-time comparison before trusting anything.
+- Notifies (`ctx.notify`) the right real user — resolved via a new
+  installation_id -> imperal_id reverse index written on every successful
+  install/reinstall — for: new issue opened, new PR opened, your review
+  requested, PR merged, CI (`workflow_run`) failed, and pushes to the default
+  branch.
+- No webhook secret configured? Everything else keeps working unchanged;
+  notifications are simply skipped (feature is fully optional, opt-in on the
+  GitHub App's own settings page).
+
+### Tests
+48/48 tests passing (40 existing + 8 new for the webhook events handler).
+`imperal validate .`: 0 errors, 0 warnings, 1 informational note (unchanged).
+
 ## v0.1.0 — 2026-07-19 — Initial build: install flow through CI/CD trigger (P0–P6)
 
 ### Added

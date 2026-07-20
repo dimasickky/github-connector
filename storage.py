@@ -24,6 +24,11 @@ than Spotify" design (no refresh-token to keep either).
 
 OAUTH_STATES_COLLECTION = "gh_oauth_states"
 INSTALLATIONS_COLLECTION = "gh_installations"
+# Reverse index installation_id -> imperal_id, written under the shared
+# "__webhook__" partition (same trick as gh_oauth_states) so the UNAUTHENTICATED
+# webhook_events handler — which receives only a GitHub installation_id in the
+# payload, no user identity at all — can resolve which real user to notify.
+INSTALLATION_INDEX_COLLECTION = "gh_installation_index"
 
 
 def _store_for(ctx, user_id: str):
@@ -118,6 +123,37 @@ async def save_installation_for_user(webhook_ctx, imperal_id: str, record: dict)
         await store.update(INSTALLATIONS_COLLECTION, existing.data[0].id, record)
     else:
         await store.create(INSTALLATIONS_COLLECTION, record)
+    await _index_installation(webhook_ctx, record.get("installation_id", ""), imperal_id)
+
+
+async def _index_installation(ctx, installation_id: str, imperal_id: str) -> None:
+    """Upsert the installation_id -> imperal_id reverse index (shared
+    "__webhook__" partition) so webhook_events can resolve a real user from
+    just the installation_id GitHub puts in every event payload."""
+    if not installation_id:
+        return
+    idx_store = _store_for(ctx, "__webhook__")
+    existing = await idx_store.query(
+        INSTALLATION_INDEX_COLLECTION, where={"installation_id": installation_id}, limit=1,
+    )
+    if existing.data:
+        await idx_store.update(INSTALLATION_INDEX_COLLECTION, existing.data[0].id,
+                                {"installation_id": installation_id, "imperal_id": imperal_id})
+    else:
+        await idx_store.create(INSTALLATION_INDEX_COLLECTION,
+                                {"installation_id": installation_id, "imperal_id": imperal_id})
+
+
+async def resolve_imperal_id_for_installation(webhook_ctx, installation_id: str) -> str | None:
+    """Look up which real user owns a given installation_id — used by the
+    unauthenticated webhook_events handler to know who to notify."""
+    idx_store = _store_for(webhook_ctx, "__webhook__")
+    page = await idx_store.query(
+        INSTALLATION_INDEX_COLLECTION, where={"installation_id": installation_id}, limit=1,
+    )
+    if page.data:
+        return page.data[0].data.get("imperal_id")
+    return None
 
 
 async def save_installation(ctx, record: dict) -> None:
