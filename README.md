@@ -1,6 +1,6 @@
 # GitHub Connector
 
-[![Imperal SDK](https://img.shields.io/badge/Imperal%20SDK-5.9.9-6c5ce7?logo=python&logoColor=white)](https://imperal.io)
+[![Imperal SDK](https://img.shields.io/badge/Imperal%20SDK-5.9.11-6c5ce7?logo=python&logoColor=white)](https://imperal.io)
 [![License: LGPL v2.1](https://img.shields.io/badge/License-LGPL--2.1-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776ab?logo=python&logoColor=white)](https://www.python.org/)
 
@@ -76,7 +76,7 @@ Merging a pull request, closing a pull request/issue, and deleting a branch all 
 ### Requirements
 
 - Python 3.11+
-- [Imperal SDK](https://github.com/imperalcloud/imperal-sdk) 5.9.9
+- [Imperal SDK](https://github.com/imperalcloud/imperal-sdk) 5.9.11
 
 ### Install and test
 
