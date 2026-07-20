@@ -49,6 +49,127 @@
       "owner_chat_tool": "github-connector"
     },
     {
+      "name": "disconnect_github",
+      "description": "Disconnect your GitHub account — removes the stored installation record. GitHub's own App installation is not touched (uninstall it from github.com/settings/installations if you also want that gone); this just makes Imperal forget about it. Requires an explicit confirm=true on a second call — the first call only previews.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "github.disconnect"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "confirm": {
+            "default": false,
+            "description": "Set true on a second call to actually disconnect. First call (default) only previews.",
+            "title": "Confirm",
+            "type": "boolean"
+          }
+        },
+        "title": "_ConfirmParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "action": {
+            "default": "",
+            "title": "Action",
+            "type": "string"
+          },
+          "needs_confirmation": {
+            "default": false,
+            "title": "Needs Confirmation",
+            "type": "boolean"
+          },
+          "output": {
+            "default": "",
+            "title": "Output",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "DestructiveActionResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "github-connector-extension.install_disconnected",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
       "name": "list_repositories",
       "description": "List the GitHub repositories this account's App installation has access to.",
       "action_type": "read",

@@ -110,3 +110,63 @@ async def test_full_install_round_trip_saves_installation_and_emits_event():
     assert installation is not None
     assert installation["account_login"] == "dimasickky"
     assert installation["repositories"] == ["dimasickky/repo-one", "dimasickky/repo-two"]
+
+
+@pytest.mark.asyncio
+async def test_disconnect_github_no_installation_errors():
+    ctx = MockContext(user_id="user-1")
+    result = await auth.disconnect_github(ctx, auth._ConfirmParams(confirm=True))
+    assert result.status == "error"
+
+
+@pytest.mark.asyncio
+async def test_disconnect_github_preview_does_not_delete():
+    ctx = MockContext(user_id="user-1")
+    await storage.save_installation(ctx, {
+        "installation_id": "1", "account_login": "octocat", "repositories": ["octocat/hello"],
+    })
+    result = await auth.disconnect_github(ctx, auth._ConfirmParams(confirm=False))
+    assert result.status == "success"
+    assert result.data.needs_confirmation is True
+    # not actually deleted yet
+    assert await storage.get_installation(ctx) is not None
+
+
+@pytest.mark.asyncio
+async def test_disconnect_github_confirmed_deletes_and_refreshes_sidebar():
+    ctx = MockContext(user_id="user-1")
+    await storage.save_installation(ctx, {
+        "installation_id": "1", "account_login": "octocat", "repositories": ["octocat/hello"],
+    })
+    result = await auth.disconnect_github(ctx, auth._ConfirmParams(confirm=True))
+    assert result.status == "success"
+    assert result.data.needs_confirmation is False
+    assert result.refresh_panels == ["sidebar"]
+    assert await storage.get_installation(ctx) is None
+
+    # sidebar must fall back to the "not connected" state afterwards
+    tree = await panels.sidebar(ctx)
+    assert tree.to_dict()["type"] == "Stack"
+    assert tree.to_dict()["props"]["children"][0]["type"] == "Empty"
+
+
+@pytest.mark.asyncio
+async def test_sidebar_connected_shows_switch_and_disconnect_buttons():
+    ctx = MockContext(user_id="user-1")
+    await storage.save_installation(ctx, {
+        "installation_id": "1", "account_login": "octocat", "repositories": ["octocat/hello"],
+    })
+    tree = await panels.sidebar(ctx)
+    payload = tree.to_dict()
+    footer = payload["props"]["children"][-1]
+    labels = [b["props"]["label"] for b in footer["props"]["children"]]
+    assert "Switch account" in labels
+    assert "Disconnect" in labels
+
+    switch_btn = next(b for b in footer["props"]["children"] if b["props"]["label"] == "Switch account")
+    assert switch_btn["props"]["on_click"]["action"] == "open"
+
+    disconnect_btn = next(b for b in footer["props"]["children"] if b["props"]["label"] == "Disconnect")
+    assert disconnect_btn["props"]["on_click"]["action"] == "call"
+    assert disconnect_btn["props"]["on_click"]["function"] == "disconnect_github"
+    assert disconnect_btn["props"]["on_click"]["params"]["confirm"] is True

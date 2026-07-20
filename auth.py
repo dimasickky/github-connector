@@ -30,12 +30,17 @@ from pydantic import BaseModel, Field
 from app import ext, chat
 from error_codes import GH_INSTALLATION_NOT_FOUND
 from imperal_sdk.chat.error_codes import INTERNAL
+from models import DestructiveActionResult
 import github_client
 import storage
 
 
 class _NoParams(BaseModel):
     pass
+
+
+class _ConfirmParams(BaseModel):
+    confirm: bool = Field(default=False, description="Set true on a second call to actually disconnect. First call (default) only previews.")
 
 
 class StartInstallResult(BaseModel):
@@ -96,6 +101,61 @@ async def start_github_install(ctx, params: _NoParams) -> ActionResult:
             ),
             ui.Text("Pick which repositories to grant access to, then come back here."),
         ]),
+    )
+
+
+@chat.function(
+    "disconnect_github",
+    description=(
+        "Disconnect your GitHub account — removes the stored installation "
+        "record. GitHub's own App installation is not touched (uninstall it "
+        "from github.com/settings/installations if you also want that gone); "
+        "this just makes Imperal forget about it. Requires an explicit "
+        "confirm=true on a second call — the first call only previews."
+    ),
+    action_type="destructive",
+    data_model=DestructiveActionResult,
+    effects=["github.disconnect"],
+    event="github-connector-extension.install_disconnected",
+)
+async def disconnect_github(ctx, params: _ConfirmParams) -> ActionResult:
+    """Two-step confirm flow, same pattern as delete_branch/merge_pull_request."""
+    installation = await storage.get_installation(ctx)
+    if not installation:
+        return ActionResult.error(
+            "No GitHub account connected — nothing to disconnect.",
+            retryable=False, code=GH_INSTALLATION_NOT_FOUND,
+        )
+
+    if not params.confirm:
+        account = installation.get("account_login", "")
+        return ActionResult.success(
+            DestructiveActionResult(
+                id=account or "github", title=account or "GitHub", kind="github_installation",
+                action="disconnect", needs_confirmation=True,
+            ),
+            summary=(
+                f"This will disconnect GitHub account '{account}' from Imperal "
+                "— repository access from chat/panels will stop working until "
+                "you reconnect. Call again with confirm=true to actually disconnect."
+            ),
+        )
+
+    await storage.delete_installation(ctx)
+    try:
+        await ctx.extensions.emit("github-connector.install_disconnected", {
+            "imperal_id": ctx.user.imperal_id,
+        })
+    except Exception as e:
+        await ctx.log(f"disconnect_github: emit failed (non-fatal): {e}", level="warning")
+
+    return ActionResult.success(
+        DestructiveActionResult(
+            id="github", title="GitHub", kind="github_installation",
+            action="disconnect", needs_confirmation=False,
+        ),
+        summary="GitHub disconnected. You can reconnect any time from the sidebar.",
+        refresh_panels=["sidebar"],
     )
 
 
