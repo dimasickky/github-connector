@@ -212,8 +212,17 @@ async def install_callback(ctx, headers: dict, body: str, query_params: dict) ->
     # sidebar panel's refresh="on_event:..." needs an explicit emit so it
     # actually re-fetches once the install finishes. ctx.extensions.emit is
     # the ExtensionsProtocol method for exactly this (context.py:106).
+    #
+    # This handler runs under the webhook's own pseudo-identity
+    # (ctx.user.imperal_id == "__webhook__"), so ctx.extensions.emit would
+    # publish the event as "__webhook__" — a session the real user's panel
+    # is never subscribed to, meaning the sidebar's refresh="on_event:..."
+    # never actually fires for them (the confirmed root cause of the
+    # "sidebar doesn't auto-refresh after reconnect" report). Emit through
+    # an ExtensionsClient rescoped to the real imperal_id instead, same
+    # rescoping trick storage.py already uses for the store.
     try:
-        await ctx.extensions.emit("github-connector.install_connected", {
+        await storage._extensions_for(ctx, imperal_id).emit("github-connector.install_connected", {
             "imperal_id": imperal_id, "account_login": account_login,
         })
     except Exception as e:

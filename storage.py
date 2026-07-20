@@ -72,6 +72,43 @@ def _store_for(ctx, user_id: str):
     )
 
 
+def _extensions_for(ctx, user_id: str):
+    """Build an ExtensionsClient scoped to an arbitrary user_id, reusing
+    ctx.extensions' own loader/ctx_factory/call_stack wiring (only the
+    kctx_dict's user_id differs). Same rationale as `_store_for` above:
+
+    `ctx.extensions.emit(...)` publishes the event under `ctx.extensions.
+    _kctx_dict["user_id"]` — inside `install_callback`/`disconnect_github`'s
+    webhook path that's the pseudo-identity `"__webhook__"`, not the real
+    Imperal user, per Extension.webhook's own docstring. A panel declared
+    `refresh="on_event:...,"` only re-fetches for the session the event was
+    published under, so an event emitted as `"__webhook__"` never reaches
+    the real user's own panel session — this was the actual mechanism behind
+    the sidebar-doesn't-auto-refresh bug: not a platform timing quirk, but a
+    wrong identity on the emitted event itself.
+
+    Rebuilding the client with the resolved real imperal_id (found via
+    `find_and_consume_oauth_state`/`get_installation`, exactly the same
+    `imperal_id` `_store_for` already uses to save the installation record)
+    fixes that at the source, without touching the SDK.
+
+    In tests, ctx.extensions is a MockExtensions (imperal_sdk.testing) with
+    no `_kctx_dict`/`_loader` at all. Falls back to ctx.extensions itself in
+    that case, same tolerance pattern as `_store_for`.
+    """
+    if not hasattr(ctx.extensions, "_kctx_dict"):
+        return ctx.extensions
+    from imperal_sdk.extensions.client import ExtensionsClient
+    scoped_kctx = dict(ctx.extensions._kctx_dict, user_id=user_id)
+    return ExtensionsClient(
+        loader=ctx.extensions._loader,
+        ctx_factory=ctx.extensions._ctx_factory,
+        kctx_dict=scoped_kctx,
+        current_app_id=ctx.extensions._current,
+        call_stack=list(ctx.extensions._call_stack),
+    )
+
+
 async def save_oauth_state(ctx, state: str, imperal_id: str) -> None:
     """Called from the authenticated install-flow chat.function, right before
     redirecting the user to GitHub's install page. Writes into the shared

@@ -13,8 +13,8 @@
 | Area | Capabilities |
 | --- | --- |
 | 🔌 **Connect** | One-click GitHub App install flow; pick which repositories the App can see, right from GitHub's own install screen |
-| 📚 **Browse** | List repositories, read file contents at any path/ref, walk commit history, see top contributors |
-| 🗂️ **Center panel** | File-tree + code viewer for any connected repository, right inside the panel |
+| 📚 **Browse** | List repositories, read file contents at any path/ref, walk commit history, see top contributors, search code across a repo, list releases |
+| 🗂️ **Center panel** | File-tree + code viewer for any connected repository, right inside the panel — README and other `.md` files render as formatted markdown, not raw text |
 | ✍️ **Write** | Create branches, commit file changes, open pull requests, open issues, comment on issues/PRs |
 | 🔀 **Merge & close** | Merge a pull request (with a diff preview shown before you confirm), close a pull request or issue — each requires an explicit second confirmation call, never a first-call surprise |
 | 🗑️ **Delete branch** | Same explicit two-step confirmation as merge/close |
@@ -101,12 +101,14 @@ Expected current result:
 - [x] GitHub App install flow (state token + webhook callback)
 - [x] Sidebar panel: connection status + repository list
 - [x] Read-only repo browsing: repositories, file contents, commits, contributors
-- [x] Center panel: file tree + code viewer
+- [x] Center panel: file tree + code viewer (markdown-aware)
 - [x] Read-only pull requests, issues, workflow runs
 - [x] Write: branches, file commits, pull requests, issues, comments
 - [x] Destructive (own two-step confirm): merge, close, delete branch
 - [x] Trigger existing GitHub Actions workflows (`workflow_dispatch`)
 - [x] Live notifications for issues/PRs/CI/pushes via a signed GitHub webhook
+- [x] Code search within a connected repository
+- [x] List releases/tags
 - [ ] Sidebar summary counts (open PRs/issues at a glance)
 - [ ] Per-user audit attribution (currently: App bot identity only)
 

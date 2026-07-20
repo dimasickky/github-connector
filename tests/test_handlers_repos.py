@@ -11,7 +11,7 @@ from imperal_sdk.testing import MockContext
 
 import handlers_repos
 import storage
-from models import _NoParams, RepoParams, FileContentsParams, ListCommitsParams
+from models import _NoParams, RepoParams, FileContentsParams, ListCommitsParams, SearchCodeParams, ListReleasesParams
 
 
 async def _seeded_ctx(user_id="user-1"):
@@ -130,3 +130,53 @@ async def test_list_contributors_success():
     assert result.status == "success"
     assert result.data.items[0].login == "octocat"
     assert result.data.items[0].contributions == 100
+
+
+@pytest.mark.asyncio
+async def test_search_code_success():
+    ctx = await _seeded_ctx()
+    ctx.http.mock_get("/search/code", {
+        "items": [
+            {"sha": "abc123", "name": "app.py", "path": "src/app.py", "score": 1.0,
+             "repository": {"full_name": "octocat/hello-world"},
+             "html_url": "https://github.com/octocat/hello-world/blob/main/src/app.py"},
+        ],
+    })
+    result = await handlers_repos.search_code(
+        ctx, SearchCodeParams(repo="octocat/hello-world", query="TODO"))
+    assert result.status == "success"
+    assert len(result.data.items) == 1
+    assert result.data.items[0].path == "src/app.py"
+    assert result.data.items[0].repository == "octocat/hello-world"
+
+
+@pytest.mark.asyncio
+async def test_search_code_not_connected_errors():
+    ctx = MockContext(user_id="user-2")
+    result = await handlers_repos.search_code(
+        ctx, SearchCodeParams(repo="octocat/hello-world", query="TODO"))
+    assert result.status == "error"
+
+
+@pytest.mark.asyncio
+async def test_list_releases_success():
+    ctx = await _seeded_ctx()
+    ctx.http.mock_get("/releases", [
+        {"id": 1, "tag_name": "v1.0.0", "name": "First release", "draft": False,
+         "prerelease": False, "published_at": "2026-01-01T00:00:00Z",
+         "body": "Initial release notes", "html_url": "https://github.com/octocat/hello-world/releases/tag/v1.0.0"},
+    ])
+    result = await handlers_repos.list_releases(
+        ctx, ListReleasesParams(repo="octocat/hello-world"))
+    assert result.status == "success"
+    assert len(result.data.items) == 1
+    assert result.data.items[0].tag_name == "v1.0.0"
+    assert result.data.items[0].title == "First release"
+
+
+@pytest.mark.asyncio
+async def test_list_releases_not_connected_errors():
+    ctx = MockContext(user_id="user-2")
+    result = await handlers_repos.list_releases(
+        ctx, ListReleasesParams(repo="octocat/hello-world"))
+    assert result.status == "error"

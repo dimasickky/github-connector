@@ -59,8 +59,17 @@ async def center(ctx, repo="", path="", ref="", **kwargs):
             content = base64.b64decode(data["content"]).decode("utf-8", errors="replace")
         except Exception:
             content = "(binary file — cannot display)"
-    language = github_client.guess_language(data.get("name", ""))
-    code_children = [breadcrumb, ui.Code(content=content, language=language, line_numbers=True)]
+    filename = data.get("name", "")
+    if filename.lower().endswith((".md", ".markdown")):
+        # Render prose files (README.md and friends) as actual formatted
+        # markdown instead of a raw syntax-highlighted code block — this was
+        # queued as "render README as markdown in the panel instead of raw
+        # code" (extensions/pricing.md backlog item).
+        body_node = ui.Markdown(content=content)
+    else:
+        language = github_client.guess_language(filename)
+        body_node = ui.Code(content=content, language=language, line_numbers=True)
+    code_children = [breadcrumb, body_node]
     if back_bar:
         code_children = [back_bar] + code_children
     return ui.Page(title=data.get("name", path), subtitle=repo, children=code_children)

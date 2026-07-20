@@ -26,6 +26,17 @@ class ListCommitsParams(BaseModel):
     limit: int = Field(default=20, ge=1, le=100, description="Max commits to return, 1-100")
 
 
+class SearchCodeParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    query: str = Field(description="Search terms — GitHub's own code search syntax works, e.g. 'TODO language:python', 'def parse_args path:src'")
+    limit: int = Field(default=20, ge=1, le=100, description="Max results to return, 1-100")
+
+
+class ListReleasesParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    limit: int = Field(default=20, ge=1, le=100, description="Max releases to return, 1-100")
+
+
 class Repository(sdl.Entity):
     full_name: str = ""
     private: bool = False
@@ -61,6 +72,21 @@ class Contributor(sdl.Entity):
     login: str = ""
     contributions: int = 0
     avatar_url: str = ""
+
+
+class CodeSearchResult(sdl.Entity):
+    path: str = ""
+    repository: str = ""
+    score: float = 0.0
+
+
+class Release(sdl.Entity):
+    tag_name: str = ""
+    name: str = ""
+    draft: bool = False
+    prerelease: bool = False
+    published_at: str = ""
+    body: str = ""
 
 
 # ── P3: read-only PR / issues / actions ─────────────────────────────────── #

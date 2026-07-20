@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.12",
   "app_id": "github-connector-extension",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "name": "GitHub Connector",
   "description": "Browse your GitHub repositories, view code and commit history, and manage pull requests and issues directly from chat.",
   "icon": "icon.svg",
@@ -828,6 +828,381 @@
           "items"
         ],
         "title": "EntityList[Contributor]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
+      "name": "search_code",
+      "description": "Search for code inside a GitHub repository. Accepts GitHub's own code-search syntax (e.g. 'TODO language:python', 'def parse_args path:src') — the repo qualifier is added automatically from the repo param.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "query": {
+            "description": "Search terms — GitHub's own code search syntax works, e.g. 'TODO language:python', 'def parse_args path:src'",
+            "title": "Query",
+            "type": "string"
+          },
+          "limit": {
+            "default": 20,
+            "description": "Max results to return, 1-100",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo",
+          "query"
+        ],
+        "title": "SearchCodeParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "CodeSearchResult": {
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "path": {
+                "default": "",
+                "title": "Path",
+                "type": "string"
+              },
+              "repository": {
+                "default": "",
+                "title": "Repository",
+                "type": "string"
+              },
+              "score": {
+                "default": 0.0,
+                "title": "Score",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "CodeSearchResult",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/CodeSearchResult"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[CodeSearchResult]",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
+      "name": "list_releases",
+      "description": "List releases (tags) published on a GitHub repository, newest first.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "limit": {
+            "default": 20,
+            "description": "Max releases to return, 1-100",
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "title": "ListReleasesParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "Release": {
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "tag_name": {
+                "default": "",
+                "title": "Tag Name",
+                "type": "string"
+              },
+              "name": {
+                "default": "",
+                "title": "Name",
+                "type": "string"
+              },
+              "draft": {
+                "default": false,
+                "title": "Draft",
+                "type": "boolean"
+              },
+              "prerelease": {
+                "default": false,
+                "title": "Prerelease",
+                "type": "boolean"
+              },
+              "published_at": {
+                "default": "",
+                "title": "Published At",
+                "type": "string"
+              },
+              "body": {
+                "default": "",
+                "title": "Body",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "Release",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/Release"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "EntityList[Release]",
         "type": "object",
         "x-sdl": "entity-list"
       },

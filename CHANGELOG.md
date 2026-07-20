@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.3.0 — 2026-07-20 — Sidebar-refresh fix, code search, releases, markdown README
+
+### Fixed
+
+- **Sidebar didn't auto-refresh after reconnecting GitHub in a separate tab.**
+  Root cause: `install_callback` runs under the webhook's own pseudo-identity
+  (`ctx.user.imperal_id == "__webhook__"`), and `ctx.extensions.emit(...)`
+  publishes the panel-refresh event under whatever user_id the calling
+  context carries — so the event went out as `"__webhook__"`, a session the
+  real user's own panel is never subscribed to. `refresh="on_event:..."`
+  therefore never fired for the actual user; only a manual panel reload
+  picked up the freshly-connected installation.
+  Fixed by rescoping the emit through an `ExtensionsClient` built for the
+  real, resolved `imperal_id` (`storage._extensions_for`, the same rescoping
+  trick already used for the store) instead of emitting through the
+  webhook's own client. No SDK change needed. Covered by a new regression
+  test (`test_install_callback_emits_event_scoped_to_real_user_not_webhook`).
+
+### Added
+
+- `search_code` — search for code inside a connected repository using
+  GitHub's own code-search syntax (e.g. `TODO language:python`), scoped
+  automatically to the repo you pass.
+- `list_releases` — list a repository's releases/tags (name, tag, draft/
+  prerelease flags, published date, release notes).
+- README.md (and any `.md` file) now renders as formatted markdown in the
+  center panel's file browser instead of a raw syntax-highlighted code
+  block.
+
+### Tests
+55/55 tests passing (50 existing + 5 new).
+
 ## v0.2.1 — 2026-07-20 — Diff preview before merge
 
 ### Added

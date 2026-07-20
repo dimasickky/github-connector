@@ -84,3 +84,21 @@ async def test_center_panel_file_view_has_back_button_and_code_block():
     ]
     assert len(back_buttons) == 1
     assert back_buttons[0]["props"]["on_click"]["params"]["path"] == ""
+
+
+@pytest.mark.asyncio
+async def test_center_panel_readme_renders_as_markdown_not_code():
+    ctx = await _seeded_ctx()
+    import base64
+    ctx.http.mock_get(
+        "/repos/octocat/hello-world/contents/README.md",
+        {"name": "README.md", "path": "README.md", "type": "file",
+         "encoding": "base64", "content": base64.b64encode(b"# Hello\n\nSome **bold** text.").decode()},
+    )
+    result = await panels_browser.center(ctx, repo="octocat/hello-world", path="README.md")
+    payload = result.to_dict()
+    types = [c.get("type") for c in payload["props"]["children"]]
+    assert "Markdown" in types
+    assert "Code" not in types
+    md_node = next(c for c in payload["props"]["children"] if c.get("type") == "Markdown")
+    assert "Some **bold** text." in md_node["props"]["content"]

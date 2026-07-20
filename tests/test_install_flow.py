@@ -112,6 +112,61 @@ async def test_full_install_round_trip_saves_installation_and_emits_event():
     assert installation["repositories"] == ["dimasickky/repo-one", "dimasickky/repo-two"]
 
 
+class _FakeProdExtensionsClient:
+    """Records what emit() was called with — used to inspect the rescoped
+    client storage._extensions_for builds, instead of the plain MockExtensions
+    both contexts start with.
+    """
+
+    def __init__(self):
+        self.emitted: list[dict] = []
+
+    async def emit(self, event_type: str, data: dict) -> None:
+        self.emitted.append({"event_type": event_type, "data": data})
+
+
+@pytest.mark.asyncio
+async def test_install_callback_emits_event_scoped_to_real_user_not_webhook(monkeypatch):
+    """Regression test for the sidebar-doesn't-auto-refresh bug: the emit must
+    go out through a client rescoped to the REAL imperal_id, resolved from the
+    same oauth-state lookup install_callback already does — not the webhook's
+    own "__webhook__" pseudo-identity, which the real user's panel session
+    never sees.
+    """
+    user_ctx = MockContext(user_id="user-77")
+    start_result = await auth.start_github_install(user_ctx, auth._NoParams())
+    state = start_result.data["install_url"].split("state=")[1]
+
+    webhook_ctx = MockContext(user_id="__webhook__")
+    webhook_ctx.store = user_ctx.store
+    webhook_ctx.secrets = user_ctx.secrets
+    webhook_ctx.http = user_ctx.http
+
+    webhook_ctx.http.mock_post("/app/installations/777/access_tokens", {"token": "ghs_faketoken"})
+    webhook_ctx.http.mock_get("/installation/repositories", {"repositories": [
+        {"full_name": "dimasickky/repo-x", "owner": {"login": "dimasickky"}},
+    ]})
+
+    seen_user_ids = []
+    fake_client = _FakeProdExtensionsClient()
+
+    def _fake_extensions_for(ctx, user_id):
+        seen_user_ids.append(user_id)
+        return fake_client
+
+    monkeypatch.setattr(storage, "_extensions_for", _fake_extensions_for)
+
+    resp = await auth.install_callback(
+        webhook_ctx, headers={}, body="",
+        query_params={"state": state, "installation_id": "777"},
+    )
+    assert resp["status"] == 200
+    assert seen_user_ids == ["user-77"]  # real user, never "__webhook__"
+    assert len(fake_client.emitted) == 1
+    assert fake_client.emitted[0]["event_type"] == "github-connector.install_connected"
+    assert fake_client.emitted[0]["data"]["imperal_id"] == "user-77"
+
+
 @pytest.mark.asyncio
 async def test_disconnect_github_no_installation_errors():
     ctx = MockContext(user_id="user-1")

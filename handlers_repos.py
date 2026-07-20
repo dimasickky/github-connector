@@ -16,7 +16,9 @@ from error_codes import GH_NOT_CONNECTED, GH_REPO_NOT_ACCESSIBLE, GH_FILE_NOT_FO
 from imperal_sdk.chat.error_codes import INTERNAL
 from models import (
     _NoParams, RepoParams, FileContentsParams, ListCommitsParams,
+    SearchCodeParams, ListReleasesParams,
     Repository, FileEntry, FileContent, Commit, Contributor,
+    CodeSearchResult, Release,
 )
 import github_client
 import storage
@@ -213,3 +215,73 @@ async def list_contributors(ctx, params: RepoParams) -> ActionResult:
         for c in contributors
     ]
     return ActionResult.success(sdl.EntityList[Contributor](items=items), summary=f"{len(items)} contributor(s)")
+
+
+@chat.function(
+    "search_code",
+    description=(
+        "Search for code inside a GitHub repository. Accepts GitHub's own code-search "
+        "syntax (e.g. 'TODO language:python', 'def parse_args path:src') — the repo "
+        "qualifier is added automatically from the repo param."
+    ),
+    action_type="read",
+    data_model=sdl.EntityList[CodeSearchResult],
+)
+async def search_code(ctx, params: SearchCodeParams) -> ActionResult:
+    """GET /search/code — installation tokens can use GitHub's code search
+    scoped to repos the installation itself can see, no extra permission
+    beyond Contents:read needed."""
+    token, err = await _get_token(ctx)
+    if err:
+        return err
+    owner, name = _split_repo(params.repo)
+    if not owner or not name:
+        return ActionResult.error("repo must be 'owner/repo'.", retryable=False, code=GH_REPO_NOT_ACCESSIBLE)
+    q = f"{params.query} repo:{owner}/{name}"
+    resp = await github_client.gh_get(ctx, token, "/search/code", {"q": q, "per_page": params.limit})
+    if resp.status_code != 200:
+        return ActionResult.error(github_client.gh_error_message(resp.status_code),
+                                  retryable=resp.status_code >= 500, code=GH_REPO_NOT_ACCESSIBLE)
+    results = resp.json().get("items", [])
+    items = [
+        CodeSearchResult(
+            id=r.get("sha", r.get("path", "")), title=r.get("name", r.get("path", "")),
+            kind="gh_code_result", path=r.get("path", ""),
+            repository=(r.get("repository") or {}).get("full_name", params.repo),
+            score=r.get("score", 0.0), url=r.get("html_url", ""),
+        )
+        for r in results
+    ]
+    return ActionResult.success(sdl.EntityList[CodeSearchResult](items=items), summary=f"{len(items)} match(es) for '{params.query}'")
+
+
+@chat.function(
+    "list_releases",
+    description="List releases (tags) published on a GitHub repository, newest first.",
+    action_type="read",
+    data_model=sdl.EntityList[Release],
+)
+async def list_releases(ctx, params: ListReleasesParams) -> ActionResult:
+    """GET /repos/{owner}/{repo}/releases."""
+    token, err = await _get_token(ctx)
+    if err:
+        return err
+    owner, name = _split_repo(params.repo)
+    if not owner or not name:
+        return ActionResult.error("repo must be 'owner/repo'.", retryable=False, code=GH_REPO_NOT_ACCESSIBLE)
+    resp = await github_client.gh_get(ctx, token, f"/repos/{owner}/{name}/releases", {"per_page": params.limit})
+    if resp.status_code != 200:
+        return ActionResult.error(github_client.gh_error_message(resp.status_code),
+                                  retryable=resp.status_code >= 500, code=GH_REPO_NOT_ACCESSIBLE)
+    releases = resp.json()
+    items = [
+        Release(
+            id=str(r["id"]), title=r.get("name") or r.get("tag_name", ""), kind="gh_release",
+            tag_name=r.get("tag_name", ""), name=r.get("name") or "",
+            draft=r.get("draft", False), prerelease=r.get("prerelease", False),
+            published_at=r.get("published_at") or r.get("created_at", ""),
+            body=r.get("body") or "", url=r.get("html_url", ""),
+        )
+        for r in releases
+    ]
+    return ActionResult.success(sdl.EntityList[Release](items=items), summary=f"{len(items)} release(s)")
