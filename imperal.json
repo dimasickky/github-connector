@@ -1,6 +1,6 @@
 {
   "manifest_schema_version": 3,
-  "sdk_version": "5.9.9",
+  "sdk_version": "5.9.12",
   "app_id": "github-connector-extension",
   "version": "0.1.0",
   "name": "GitHub Connector",
@@ -2574,7 +2574,7 @@
   "signals": [],
   "schedules": [],
   "required_scopes": [],
-  "icon_size_bytes": 518,
+  "icon_size_bytes": 891,
   "webhooks": [
     {
       "path": "/install_callback",
