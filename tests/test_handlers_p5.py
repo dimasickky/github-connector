@@ -56,6 +56,16 @@ async def test_merge_pull_request_preview_shows_diff():
 
 
 @pytest.mark.asyncio
+async def test_merge_pull_request_preview_warns_on_conflicting_state():
+    ctx = await _seeded_ctx()
+    ctx.http.mock_get("/pulls/5", {"number": 5, "mergeable_state": "dirty"})
+    result = await handlers_pulls.merge_pull_request(
+        ctx, MergePullRequestParams(repo="octocat/hello-world", number=5))
+    assert result.status == "success"
+    assert "conflict" in result.summary.lower()
+
+
+@pytest.mark.asyncio
 async def test_merge_pull_request_confirmed_merges():
     ctx = await _seeded_ctx()
     ctx.http._mocks.append(("PUT", "/pulls/5/merge", {"merged": True, "sha": "abc123"}, 200, {}))

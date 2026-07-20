@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.4.0 — 2026-07-21 — Pull request reviews, single-item lookup, labels/assignees/draft
+
+### Added
+
+- **`review_pull_request`** — the main gap closed this release. Submits a
+  real GitHub PR review (`POST /pulls/{number}/reviews`) with a verdict —
+  `APPROVE`, `REQUEST_CHANGES`, or `COMMENT` — distinct from
+  `comment_on_issue_or_pr`'s plain issue-style comment: this shows up as an
+  actual review with GitHub's own green/red badge on the PR. Validates that
+  `REQUEST_CHANGES`/`COMMENT` carry a non-empty body before calling GitHub,
+  so a caller gets an actionable message instead of GitHub's own 422.
+- `get_pull_request` / `get_issue` — fetch one PR or issue in full by
+  number (body, labels, assignees, `mergeable_state` for PRs) instead of
+  paging through `list_pull_requests`/`list_issues` hoping the right one
+  lands on the first page.
+- `create_pull_request` / `create_issue` now accept `labels`, `assignees`,
+  and (for PRs) `draft` — applied via a follow-up PATCH to the Issues API
+  (GitHub's `POST /pulls` itself doesn't take labels/assignees). A failed
+  label/assignee PATCH is logged as a warning, not a hard failure — the
+  PR/issue itself is already created by that point.
+- `merge_pull_request`'s preview now also surfaces `mergeable_state` and
+  warns explicitly when it's `dirty`/`conflicting` (merge conflicts),
+  `blocked` (a required check/review isn't satisfied), or `unstable`
+  (non-required checks failing) — so `confirm=true` is never a blind leap
+  on a PR that GitHub itself expects to reject.
+
+### Why this release
+
+Code review against the actual handlers (not the spec) turned up one real
+semantic gap for an extension literally named "manage pull requests":
+there was no way to approve, request changes, or leave a genuine PR review
+— only a diff preview, merge, and close. Everything else here was cheap to
+add once the same files were open: single-item lookup and labels/
+assignees/draft round out `create_*`/`list_*` without materially growing
+the surface area. Deliberately left for later (bigger lift, lower urgency):
+workflow run rerun/cancel + job logs, atomic multi-file commits, `delete_file`.
+
+### Tests
+62/62 tests passing (55 existing + 7 new).
+
 ## v0.3.0 — 2026-07-20 — Sidebar-refresh fix, code search, releases, markdown README
 
 ### Fixed

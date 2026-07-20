@@ -97,10 +97,20 @@ class ListPullsParams(BaseModel):
     limit: int = Field(default=20, ge=1, le=100, description="Max pull requests to return, 1-100")
 
 
+class GetPullRequestParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    number: int = Field(description="Pull request number")
+
+
 class ListIssuesParams(BaseModel):
     repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
     state: str = Field(default="open", description="'open', 'closed', or 'all'")
     limit: int = Field(default=20, ge=1, le=100, description="Max issues to return, 1-100")
+
+
+class GetIssueParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    number: int = Field(description="Issue number")
 
 
 class WorkflowRunsParams(BaseModel):
@@ -116,6 +126,10 @@ class PullRequest(sdl.Entity):
     head: str = ""
     draft: bool = False
     created_at: str = ""
+    body: str = ""
+    mergeable_state: str = ""
+    labels: list[str] = []
+    assignees: list[str] = []
 
 
 class Issue(sdl.Entity):
@@ -124,6 +138,9 @@ class Issue(sdl.Entity):
     author: str = ""
     comments: int = 0
     created_at: str = ""
+    body: str = ""
+    labels: list[str] = []
+    assignees: list[str] = []
 
 
 class WorkflowRun(sdl.Entity):
@@ -157,18 +174,37 @@ class CreatePullRequestParams(BaseModel):
     head: str = Field(description="Branch containing the changes")
     base: str = Field(description="Branch to merge into, e.g. 'main'")
     body: str = Field(default="", description="Pull request description")
+    draft: bool = Field(default=False, description="Open as a draft pull request")
+    labels: list[str] = Field(default_factory=list, description="Label names to apply (must already exist on the repo)")
+    assignees: list[str] = Field(default_factory=list, description="GitHub usernames to assign to the pull request")
 
 
 class CreateIssueParams(BaseModel):
     repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
     title: str = Field(description="Issue title")
     body: str = Field(default="", description="Issue description")
+    labels: list[str] = Field(default_factory=list, description="Label names to apply (must already exist on the repo)")
+    assignees: list[str] = Field(default_factory=list, description="GitHub usernames to assign to the issue")
 
 
 class CommentParams(BaseModel):
     repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
     number: int = Field(description="Issue or pull request number")
     body: str = Field(description="Comment text (markdown supported)")
+
+
+class ReviewPullRequestParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    number: int = Field(description="Pull request number")
+    event: str = Field(description="Review verdict: 'APPROVE', 'REQUEST_CHANGES', or 'COMMENT'")
+    body: str = Field(default="", description="Overall review comment (required by GitHub for REQUEST_CHANGES/COMMENT, optional for APPROVE)")
+
+
+class Review(sdl.Entity):
+    author: str = ""
+    state: str = ""
+    body: str = ""
+    submitted_at: str = ""
 
 
 class Branch(sdl.Entity):

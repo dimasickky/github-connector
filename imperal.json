@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.12",
   "app_id": "github-connector-extension",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "name": "GitHub Connector",
   "description": "Browse your GitHub repositories, view code and commit history, and manage pull requests and issues directly from chat.",
   "icon": "icon.svg",
@@ -1353,6 +1353,32 @@
                 "default": "",
                 "title": "Created At",
                 "type": "string"
+              },
+              "body": {
+                "default": "",
+                "title": "Body",
+                "type": "string"
+              },
+              "mergeable_state": {
+                "default": "",
+                "title": "Mergeable State",
+                "type": "string"
+              },
+              "labels": {
+                "default": [],
+                "items": {
+                  "type": "string"
+                },
+                "title": "Labels",
+                "type": "array"
+              },
+              "assignees": {
+                "default": [],
+                "items": {
+                  "type": "string"
+                },
+                "title": "Assignees",
+                "type": "array"
               }
             },
             "required": [
@@ -1416,6 +1442,179 @@
       "owner_chat_tool": "github-connector"
     },
     {
+      "name": "get_pull_request",
+      "description": "Get full details of a single pull request by number — title, body, state, branches, draft status, labels, assignees, and mergeable_state.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "number": {
+            "description": "Pull request number",
+            "title": "Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo",
+          "number"
+        ],
+        "title": "GetPullRequestParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "number": {
+            "default": 0,
+            "title": "Number",
+            "type": "integer"
+          },
+          "state": {
+            "default": "open",
+            "title": "State",
+            "type": "string"
+          },
+          "author": {
+            "default": "",
+            "title": "Author",
+            "type": "string"
+          },
+          "base": {
+            "default": "",
+            "title": "Base",
+            "type": "string"
+          },
+          "head": {
+            "default": "",
+            "title": "Head",
+            "type": "string"
+          },
+          "draft": {
+            "default": false,
+            "title": "Draft",
+            "type": "boolean"
+          },
+          "created_at": {
+            "default": "",
+            "title": "Created At",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "title": "Body",
+            "type": "string"
+          },
+          "mergeable_state": {
+            "default": "",
+            "title": "Mergeable State",
+            "type": "string"
+          },
+          "labels": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "assignees": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Assignees",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PullRequest",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
       "name": "create_pull_request",
       "description": "Open a new pull request in a connected GitHub repository (head branch into base branch).",
       "action_type": "write",
@@ -1451,6 +1650,28 @@
             "description": "Pull request description",
             "title": "Body",
             "type": "string"
+          },
+          "draft": {
+            "default": false,
+            "description": "Open as a draft pull request",
+            "title": "Draft",
+            "type": "boolean"
+          },
+          "labels": {
+            "description": "Label names to apply (must already exist on the repo)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "assignees": {
+            "description": "GitHub usernames to assign to the pull request",
+            "items": {
+              "type": "string"
+            },
+            "title": "Assignees",
+            "type": "array"
           }
         },
         "required": [
@@ -1566,6 +1787,32 @@
             "default": "",
             "title": "Created At",
             "type": "string"
+          },
+          "body": {
+            "default": "",
+            "title": "Body",
+            "type": "string"
+          },
+          "mergeable_state": {
+            "default": "",
+            "title": "Mergeable State",
+            "type": "string"
+          },
+          "labels": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "assignees": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Assignees",
+            "type": "array"
           }
         },
         "required": [
@@ -1724,6 +1971,152 @@
       "owner_chat_tool": "github-connector"
     },
     {
+      "name": "review_pull_request",
+      "description": "Submit a formal review on a pull request — APPROVE, REQUEST_CHANGES, or a plain COMMENT. This is a real GitHub review (POST /pulls/{number}/reviews), distinct from comment_on_issue_or_pr's plain issue-style comment: it shows up as an actual review verdict with the green/red badge on the PR.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "github.review_pull_request"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "number": {
+            "description": "Pull request number",
+            "title": "Number",
+            "type": "integer"
+          },
+          "event": {
+            "description": "Review verdict: 'APPROVE', 'REQUEST_CHANGES', or 'COMMENT'",
+            "title": "Event",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "description": "Overall review comment (required by GitHub for REQUEST_CHANGES/COMMENT, optional for APPROVE)",
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo",
+          "number",
+          "event"
+        ],
+        "title": "ReviewPullRequestParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "author": {
+            "default": "",
+            "title": "Author",
+            "type": "string"
+          },
+          "state": {
+            "default": "",
+            "title": "State",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "title": "Body",
+            "type": "string"
+          },
+          "submitted_at": {
+            "default": "",
+            "title": "Submitted At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Review",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "github-connector-extension.review_pull_request",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
       "name": "list_issues",
       "description": "List issues on a connected GitHub repository (open by default). Pull requests are excluded — use list_pull_requests for those.",
       "action_type": "read",
@@ -1854,6 +2247,27 @@
                 "default": "",
                 "title": "Created At",
                 "type": "string"
+              },
+              "body": {
+                "default": "",
+                "title": "Body",
+                "type": "string"
+              },
+              "labels": {
+                "default": [],
+                "items": {
+                  "type": "string"
+                },
+                "title": "Labels",
+                "type": "array"
+              },
+              "assignees": {
+                "default": [],
+                "items": {
+                  "type": "string"
+                },
+                "title": "Assignees",
+                "type": "array"
               }
             },
             "required": [
@@ -1917,6 +2331,164 @@
       "owner_chat_tool": "github-connector"
     },
     {
+      "name": "get_issue",
+      "description": "Get full details of a single issue by number — title, body, state, comment count, labels, assignees.",
+      "action_type": "read",
+      "chain_callable": true,
+      "effects": [],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "number": {
+            "description": "Issue number",
+            "title": "Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "repo",
+          "number"
+        ],
+        "title": "GetIssueParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "number": {
+            "default": 0,
+            "title": "Number",
+            "type": "integer"
+          },
+          "state": {
+            "default": "open",
+            "title": "State",
+            "type": "string"
+          },
+          "author": {
+            "default": "",
+            "title": "Author",
+            "type": "string"
+          },
+          "comments": {
+            "default": 0,
+            "title": "Comments",
+            "type": "integer"
+          },
+          "created_at": {
+            "default": "",
+            "title": "Created At",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "title": "Body",
+            "type": "string"
+          },
+          "labels": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "assignees": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Assignees",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "Issue",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
       "name": "create_issue",
       "description": "Open a new issue in a connected GitHub repository.",
       "action_type": "write",
@@ -1942,6 +2514,22 @@
             "description": "Issue description",
             "title": "Body",
             "type": "string"
+          },
+          "labels": {
+            "description": "Label names to apply (must already exist on the repo)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "assignees": {
+            "description": "GitHub usernames to assign to the issue",
+            "items": {
+              "type": "string"
+            },
+            "title": "Assignees",
+            "type": "array"
           }
         },
         "required": [
@@ -2045,6 +2633,27 @@
             "default": "",
             "title": "Created At",
             "type": "string"
+          },
+          "body": {
+            "default": "",
+            "title": "Body",
+            "type": "string"
+          },
+          "labels": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "assignees": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Assignees",
+            "type": "array"
           }
         },
         "required": [

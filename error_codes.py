@@ -19,3 +19,4 @@ GH_RATE_LIMITED = "GH_RATE_LIMITED"                   # GitHub's own rate limit 
 GH_FILE_NOT_FOUND = "GH_FILE_NOT_FOUND"               # path doesn't exist at that ref
 GH_CONFIRM_REQUIRED = "GH_CONFIRM_REQUIRED"           # destructive/write call made without confirm=true (preview only)
 GH_WEBHOOK_SIGNATURE_INVALID = "GH_WEBHOOK_SIGNATURE_INVALID"  # setup-callback HMAC check failed
+GH_INVALID_REVIEW_EVENT = "GH_INVALID_REVIEW_EVENT"   # review event isn't one of APPROVE/REQUEST_CHANGES/COMMENT

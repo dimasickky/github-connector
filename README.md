@@ -15,8 +15,10 @@
 | 🔌 **Connect** | One-click GitHub App install flow; pick which repositories the App can see, right from GitHub's own install screen |
 | 📚 **Browse** | List repositories, read file contents at any path/ref, walk commit history, see top contributors, search code across a repo, list releases |
 | 🗂️ **Center panel** | File-tree + code viewer for any connected repository, right inside the panel — README and other `.md` files render as formatted markdown, not raw text |
-| ✍️ **Write** | Create branches, commit file changes, open pull requests, open issues, comment on issues/PRs |
-| 🔀 **Merge & close** | Merge a pull request (with a diff preview shown before you confirm), close a pull request or issue — each requires an explicit second confirmation call, never a first-call surprise |
+| ✍️ **Write** | Create branches, commit file changes, open pull requests (with labels/assignees/draft), open issues (with labels/assignees), comment on issues/PRs |
+| ✅ **Review** | Approve, request changes, or comment on a pull request as a real GitHub review (`/pulls/{number}/reviews`) — a genuine review verdict, not a plain comment |
+| 🔎 **Single-item lookup** | Get one pull request or issue by number in full (body, labels, assignees, mergeable_state) — no need to page through a list |
+| 🔀 **Merge & close** | Merge a pull request (with a diff preview *and* a mergeable_state warning — conflicts/blocked/unstable — shown before you confirm), close a pull request or issue — each requires an explicit second confirmation call, never a first-call surprise |
 | 🗑️ **Delete branch** | Same explicit two-step confirmation as merge/close |
 | 🚀 **Deploy** | Trigger an existing GitHub Actions `workflow_dispatch` — runs the CI/CD you already configured, doesn't invent its own |
 | 🔔 **Live notifications** | New issues, PRs opened, review requests, PR merges, failed CI runs, and pushes to the default branch push a notification the moment GitHub reports them — no need to ask |
@@ -46,6 +48,8 @@ Once connected, the sidebar lists every repository the installation covers. Clic
 - "list my repos" / "show me the file tree for `owner/repo`"
 - "what changed in the last 10 commits on `owner/repo`?"
 - "open a PR from `feature/x` into `main`"
+- "approve PR #42" / "request changes on #42, tell them to fix the tests"
+- "show me PR #42" / "show me issue #7"
 - "trigger the deploy workflow on `main`"
 
 ### 4. (Optional) Turn on live notifications
@@ -109,8 +113,14 @@ Expected current result:
 - [x] Live notifications for issues/PRs/CI/pushes via a signed GitHub webhook
 - [x] Code search within a connected repository
 - [x] List releases/tags
+- [x] Pull request reviews: approve / request changes / comment (`/pulls/{number}/reviews`)
+- [x] Single-item lookup: `get_pull_request`, `get_issue`
+- [x] labels/assignees/draft on `create_pull_request`/`create_issue`
+- [x] `mergeable_state` surfaced (with a conflict/blocked/unstable warning) in the merge preview
 - [ ] Sidebar summary counts (open PRs/issues at a glance)
 - [ ] Per-user audit attribution (currently: App bot identity only)
+- [ ] Workflow run rerun/cancel + job logs
+- [ ] Atomic multi-file commits, `delete_file`
 
 ## Non-goals (v1)
 

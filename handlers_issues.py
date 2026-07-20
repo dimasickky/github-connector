@@ -10,9 +10,23 @@ for those).
 """
 from imperal_sdk import ActionResult, sdl
 from app import chat
-from models import ListIssuesParams, CreateIssueParams, CommentParams, CloseParams, Issue, Comment, DestructiveActionResult
+from models import ListIssuesParams, GetIssueParams, CreateIssueParams, CommentParams, CloseParams, Issue, Comment, DestructiveActionResult
 from handlers_repos import _get_token, _split_repo
 import github_client
+
+
+def _issue_from_json(i: dict) -> Issue:
+    """Shared issue-JSON -> Issue reshape (list/get/create all return the
+    same shape from GitHub)."""
+    return Issue(
+        id=i["number"], title=i["title"], kind="issue",
+        number=i["number"], state=i["state"], author=(i.get("user") or {}).get("login", ""),
+        comments=i.get("comments", 0), created_at=i.get("created_at", ""),
+        body=i.get("body") or "",
+        labels=[l.get("name", "") for l in (i.get("labels") or [])],
+        assignees=[a.get("login", "") for a in (i.get("assignees") or [])],
+        url=i.get("html_url", ""),
+    )
 
 
 @chat.function(
@@ -35,20 +49,32 @@ async def list_issues(ctx, params: ListIssuesParams) -> ActionResult:
     if resp.status_code >= 400:
         return ActionResult.error(github_client.gh_error_message(resp.status_code), retryable=True)
 
-    issues = [
-        Issue(
-            id=i["number"], title=i["title"], kind="issue",
-            number=i["number"], state=i["state"], author=(i.get("user") or {}).get("login", ""),
-            comments=i.get("comments", 0), created_at=i.get("created_at", ""),
-            url=i.get("html_url", ""),
-        )
-        for i in resp.json()
-        if "pull_request" not in i
-    ]
+    issues = [_issue_from_json(i) for i in resp.json() if "pull_request" not in i]
     return ActionResult.success(
         sdl.EntityList[Issue](items=issues),
         summary=f"{len(issues)} issue(s) ({params.state}) in {params.repo}",
     )
+
+
+@chat.function(
+    "get_issue",
+    description="Get full details of a single issue by number — title, body, state, comment count, labels, assignees.",
+    action_type="read",
+    data_model=Issue,
+)
+async def get_issue(ctx, params: GetIssueParams) -> ActionResult:
+    """GET /repos/{owner}/{repo}/issues/{number}."""
+    token, err = await _get_token(ctx)
+    if err:
+        return err
+    owner, name = _split_repo(params.repo)
+    resp = await github_client.gh_get(ctx, token, f"/repos/{owner}/{name}/issues/{params.number}")
+    if resp.status_code >= 400:
+        return ActionResult.error(github_client.gh_error_message(resp.status_code), retryable=resp.status_code >= 500)
+    i = resp.json()
+    if "pull_request" in i:
+        return ActionResult.error(f"#{params.number} is a pull request, not an issue — use get_pull_request instead.", retryable=False)
+    return ActionResult.success(_issue_from_json(i), summary=f"Issue #{i['number']} in {params.repo}: {i['title']} ({i['state']})")
 
 
 @chat.function(
@@ -60,23 +86,24 @@ async def list_issues(ctx, params: ListIssuesParams) -> ActionResult:
     event="github-connector-extension.create_issue",
 )
 async def create_issue(ctx, params: CreateIssueParams) -> ActionResult:
-    """Open a new issue with a title and optional body."""
+    """Open a new issue with a title, optional body, labels, and assignees
+    (GitHub's POST /issues accepts all of these directly, unlike PRs)."""
     token, err = await _get_token(ctx)
     if err:
         return err
 
     owner, name = _split_repo(params.repo)
-    resp = await github_client.gh_post(
-        ctx, token, f"/repos/{owner}/{name}/issues",
-        json_body={"title": params.title, "body": params.body},
-    )
+    json_body: dict = {"title": params.title, "body": params.body}
+    if params.labels:
+        json_body["labels"] = params.labels
+    if params.assignees:
+        json_body["assignees"] = params.assignees
+    resp = await github_client.gh_post(ctx, token, f"/repos/{owner}/{name}/issues", json_body=json_body)
     if resp.status_code >= 400:
         return ActionResult.error(github_client.gh_error_message(resp.status_code), retryable=True)
 
     i = resp.json()
-    result = Issue(id=i["number"], title=i["title"], kind="issue",
-                   number=i["number"], state=i["state"], author=(i.get("user") or {}).get("login", ""),
-                   comments=i.get("comments", 0), created_at=i.get("created_at", ""), url=i.get("html_url", ""))
+    result = _issue_from_json(i)
     return ActionResult.success(result, summary=f"Opened issue #{i['number']} in {params.repo}: {params.title}")
 
 

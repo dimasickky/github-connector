@@ -11,7 +11,8 @@ import handlers_issues
 import storage
 from models import (
     CreateBranchParams, CreateOrUpdateFileParams, CreatePullRequestParams,
-    CreateIssueParams, CommentParams,
+    CreateIssueParams, CommentParams, GetPullRequestParams, GetIssueParams,
+    ReviewPullRequestParams,
 )
 
 
@@ -95,3 +96,93 @@ async def test_comment_on_issue_or_pr_success():
     result = await handlers_issues.comment_on_issue_or_pr(
         ctx, CommentParams(repo="octocat/hello-world", number=3, body="thanks!"))
     assert result.status == "success"
+
+
+@pytest.mark.asyncio
+async def test_create_pull_request_applies_labels_and_assignees():
+    ctx = await _seeded_ctx()
+    ctx.http.mock_post("/pulls", {
+        "number": 9, "title": "My PR", "state": "open", "draft": True,
+        "user": {"login": "octocat"}, "base": {"ref": "main"}, "head": {"ref": "feature/x"},
+        "created_at": "2026-01-01T00:00:00Z", "html_url": "https://github.com/octocat/hello-world/pull/9",
+    })
+    ctx.http._mocks.append(("PATCH", "/issues/9", {
+        "labels": [{"name": "bug"}], "assignees": [{"login": "octocat"}],
+    }, 200, {}))
+
+    result = await handlers_pulls.create_pull_request(
+        ctx, CreatePullRequestParams(repo="octocat/hello-world", title="My PR",
+                                      head="feature/x", base="main", draft=True,
+                                      labels=["bug"], assignees=["octocat"]))
+    assert result.status == "success"
+    assert result.data.draft is True
+    assert result.data.labels == ["bug"]
+    assert result.data.assignees == ["octocat"]
+
+
+@pytest.mark.asyncio
+async def test_get_pull_request_success():
+    ctx = await _seeded_ctx()
+    ctx.http.mock_get("/pulls/9", {
+        "number": 9, "title": "My PR", "state": "open", "draft": False,
+        "user": {"login": "octocat"}, "base": {"ref": "main"}, "head": {"ref": "feature/x"},
+        "created_at": "2026-01-01T00:00:00Z", "body": "Description here",
+        "mergeable_state": "clean", "labels": [{"name": "bug"}],
+        "html_url": "https://github.com/octocat/hello-world/pull/9",
+    })
+    result = await handlers_pulls.get_pull_request(
+        ctx, GetPullRequestParams(repo="octocat/hello-world", number=9))
+    assert result.status == "success"
+    assert result.data.number == 9
+    assert result.data.body == "Description here"
+    assert result.data.mergeable_state == "clean"
+    assert result.data.labels == ["bug"]
+
+
+@pytest.mark.asyncio
+async def test_get_issue_success():
+    ctx = await _seeded_ctx()
+    ctx.http.mock_get("/issues/3", {
+        "number": 3, "title": "Bug", "state": "open", "user": {"login": "octocat"},
+        "comments": 2, "created_at": "2026-01-01T00:00:00Z", "body": "It's broken",
+        "assignees": [{"login": "octocat"}], "html_url": "https://github.com/octocat/hello-world/issues/3",
+    })
+    result = await handlers_issues.get_issue(
+        ctx, GetIssueParams(repo="octocat/hello-world", number=3))
+    assert result.status == "success"
+    assert result.data.number == 3
+    assert result.data.body == "It's broken"
+    assert result.data.assignees == ["octocat"]
+
+
+@pytest.mark.asyncio
+async def test_review_pull_request_approve_success():
+    ctx = await _seeded_ctx()
+    ctx.http._mocks.append(("POST", "/pulls/9/reviews", {
+        "id": 1, "user": {"login": "octocat"}, "state": "APPROVED",
+        "body": "LGTM", "submitted_at": "2026-01-01T00:00:00Z",
+        "html_url": "https://github.com/octocat/hello-world/pull/9#pullrequestreview-1",
+    }, 200, {}))
+    result = await handlers_pulls.review_pull_request(
+        ctx, ReviewPullRequestParams(repo="octocat/hello-world", number=9,
+                                      event="approve", body="LGTM"))
+    assert result.status == "success"
+    assert result.data.state == "APPROVED"
+
+
+@pytest.mark.asyncio
+async def test_review_pull_request_request_changes_requires_body():
+    ctx = await _seeded_ctx()
+    result = await handlers_pulls.review_pull_request(
+        ctx, ReviewPullRequestParams(repo="octocat/hello-world", number=9,
+                                      event="REQUEST_CHANGES", body=""))
+    assert result.status == "error"
+
+
+@pytest.mark.asyncio
+async def test_review_pull_request_invalid_event_errors():
+    ctx = await _seeded_ctx()
+    result = await handlers_pulls.review_pull_request(
+        ctx, ReviewPullRequestParams(repo="octocat/hello-world", number=9,
+                                      event="MAYBE", body="hmm"))
+    assert result.status == "error"
