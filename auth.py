@@ -24,7 +24,7 @@ actual GitHub App webhook deliveries (issue/PR/push events), not built here.
 """
 import secrets as _secrets_mod
 
-from imperal_sdk import ActionResult
+from imperal_sdk import ActionResult, ui
 from pydantic import BaseModel, Field
 
 from app import ext, chat
@@ -74,6 +74,15 @@ async def start_github_install(ctx, params: _NoParams) -> ActionResult:
             f"Open this link to connect GitHub — choose which repositories "
             f"to give access to, then come back here: {install_url}"
         ),
+        ui=ui.Stack([
+            ui.Button(
+                "Open GitHub install page",
+                icon="Github",
+                variant="primary",
+                on_click=ui.Open(install_url),
+            ),
+            ui.Text("Pick which repositories to grant access to, then come back here."),
+        ]),
     )
 
 
