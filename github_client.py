@@ -1,21 +1,19 @@
-"""github-connector · thin GitHub REST client + JWT/installation-token minting.
+"""github-connector · thin GitHub REST client + user-token resolution.
 
-Mechanics (per extensions/github-connector.md §3-4): App-level JWT (RS256,
-signed with the GitHub App's own private key) is exchanged for a short-lived
-(~1h) installation access token on every real call — no long-lived token is
-ever stored (simpler than an OAuth refresh-token flow: nothing to keep
-refreshing, `app_id` + private key + `installation_id` is always enough to
-mint a fresh one). Callers ask for a ready-to-use installation token via
-`get_installation_token(ctx, installation_id)`; everything else in this
-module is a thin `ctx.http` wrapper over the GitHub REST API using that
-token, following the same shape as wp-site-connector's `wp_client.py`.
+Per extensions/github-connector.md §12.1 (2026-07-23 pivot): every real API
+call now authenticates as the GitHub user themselves (user-to-server OAuth
+token, see user_auth.py), not as the App's own bot identity. `get_user_token`
+resolves this user's stored encrypted token record, transparently refreshes
+it if it's within 5 minutes of expiry (persisting the refreshed pair back —
+GitHub rotates the refresh_token on every use), and returns a ready-to-use
+bearer token string. Everything else in this module is a thin `ctx.http`
+wrapper over the GitHub REST API using that token, following the same shape
+as wp-site-connector's `wp_client.py`.
 """
-import time
-
-import jwt as _pyjwt
+import user_auth
+import storage
 
 _GITHUB_API = "https://api.github.com"
-_JWT_TTL_SECONDS = 540  # GitHub caps this at 600s; 540 leaves clock-skew margin
 
 _EXT_LANG = {
     "py": "python", "js": "javascript", "ts": "typescript", "tsx": "typescript",
@@ -33,56 +31,39 @@ def guess_language(filename: str) -> str:
     return _EXT_LANG.get(ext, "")
 
 _ERROR_MESSAGES = {
-    401: "GitHub rejected the installation token — the App installation may have been removed or its permissions changed.",
-    403: "GitHub denied this request — the installation may not have permission for this repository/action, or GitHub's rate limit was hit.",
-    404: "Not found on GitHub — check the repository name/path/number, and that this installation actually covers that repository.",
+    401: "GitHub rejected your access token — reconnect GitHub from the sidebar to refresh authorization.",
+    403: "GitHub denied this request — your account may not have permission for this repository/action, or GitHub's rate limit was hit.",
+    404: "Not found on GitHub — check the repository name/path/number, and that you actually have access to that repository.",
     422: "GitHub rejected the request content (validation error) — check the parameters.",
 }
 
 
-def _mint_app_jwt(app_id: str, private_key_pem: str) -> str:
-    """Build a short-lived App-level JWT per GitHub's documented algorithm:
-    RS256, `iss`=App ID, `iat`/`exp` within GitHub's allowed clock-skew window.
-    This JWT authenticates as the App itself — it is ONLY ever used to mint an
-    installation token (next step), never sent to a repo-level endpoint.
-    """
-    now = int(time.time())
-    payload = {
-        "iat": now - 60,  # backdate 60s for clock drift, per GitHub's own docs
-        "exp": now + _JWT_TTL_SECONDS,
-        "iss": app_id,
-    }
-    return _pyjwt.encode(payload, private_key_pem, algorithm="RS256")
+async def get_user_token(ctx) -> tuple[str | None, str | None]:
+    """Resolve this user's stored user-to-server OAuth token, refreshing it
+    first if it's close to expiry. Returns (token, error_message)."""
+    record = await storage.get_user_token(ctx)
+    if not record:
+        return None, "No GitHub account connected — use start_github_install first."
 
+    decrypted = await user_auth.decrypt_token_record(ctx, record)
 
-async def get_installation_token(ctx, installation_id: str) -> tuple[str | None, str | None]:
-    """Mint a fresh installation access token (~1h TTL, GitHub-side). Returns
-    (token, error_message). Called on every real tool-call — no caching of the
-    token itself here (the goal is to never persist a live GitHub credential;
-    ctx.http itself is not asked to cache across calls either)."""
-    app_id = await ctx.secrets.get("github_app_id")
-    private_key = await ctx.secrets.get("github_app_private_key")
-    if not app_id or not private_key:
-        return None, "GitHub App credentials are not configured (github_app_id / github_app_private_key)."
+    if user_auth.refresh_token_expired(decrypted):
+        return None, "Your GitHub authorization has expired — reconnect GitHub from the sidebar."
 
-    app_jwt = _mint_app_jwt(app_id, private_key)
-    resp = await ctx.http.post(
-        f"{_GITHUB_API}/app/installations/{installation_id}/access_tokens",
-        headers={
-            "Authorization": f"Bearer {app_jwt}",
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28",
-        },
-    )
-    if resp.status_code == 404:
-        return None, "GitHub installation not found — it may have been uninstalled or revoked on GitHub's side."
-    if resp.status_code >= 400:
-        return None, _ERROR_MESSAGES.get(resp.status_code, f"GitHub token request failed (HTTP {resp.status_code}).")
-    return resp.json().get("token"), None
+    if not user_auth.access_token_needs_refresh(decrypted):
+        return decrypted["access_token"], None
+
+    refreshed, err = await user_auth.refresh_user_token(ctx, decrypted["refresh_token"])
+    if err:
+        return None, f"Could not refresh your GitHub authorization: {err}"
+
+    new_record = await user_auth.encrypt_token_record(ctx, refreshed)
+    await storage.save_user_token(ctx, new_record)
+    return refreshed["access_token"], None
 
 
 async def gh_get(ctx, token: str, path: str, params: dict | None = None):
-    """GET a GitHub REST endpoint with an installation token. Returns the raw
+    """GET a GitHub REST endpoint with a bearer token. Returns the raw
     httpx-like response — callers check .status_code and decode .json()/.text
     themselves (mirrors wp_client.py's thin-wrapper shape, not hiding errors
     behind a generic exception)."""

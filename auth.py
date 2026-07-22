@@ -2,20 +2,22 @@
 
 Follows the manual OAuth-like pattern already proven by spotify/app.py +
 handlers/auth.py (per extensions/github-connector.md §4), adapted for a
-GitHub App install rather than a classic OAuth authorize/token exchange:
+GitHub App install with "Request user authorization (OAuth) during
+installation" enabled (§12.1, 2026-07-23 pivot to full user-to-server auth):
 
 1. `start_install` (authenticated chat.function) generates a one-shot state
    token, records it (storage.save_oauth_state — written under the shared
    "__webhook__" store partition so the webhook can find it later), and
    returns the public GitHub install URL for the user to open.
 2. GitHub redirects back to our `setup_url` (`ctx.webhook_url("install_callback")`)
-   with `installation_id` + `state` as query params.
+   with `installation_id`, `code`, and our own `state` as query params.
 3. `install_callback` (unauthenticated @ext.webhook) validates `state`,
-   verifies the installation is live by minting a real installation token,
-   fetches installation + repository metadata, and saves the finished
-   installation record under the REAL user's store partition (resolved from
-   the state token, not from the request — the request itself carries no
-   trustworthy identity).
+   exchanges `code` for a real user-to-server access+refresh token pair
+   (user_auth.exchange_code_for_token), fetches the installation's
+   repository list using that token, and saves both the encrypted token
+   record and the installation metadata under the REAL user's store
+   partition (resolved from the state token, not from the request — the
+   request itself carries no trustworthy identity).
 
 No GitHub webhook HMAC verification is needed on `install_callback` itself
 (it's a GET redirect from the browser, not a signed webhook event) — HMAC
@@ -33,6 +35,7 @@ from imperal_sdk.chat.error_codes import INTERNAL
 from models import DestructiveActionResult
 import github_client
 import storage
+import user_auth
 
 
 class _NoParams(BaseModel):
@@ -142,6 +145,7 @@ async def disconnect_github(ctx, params: _ConfirmParams) -> ActionResult:
         )
 
     await storage.delete_installation(ctx)
+    await storage.delete_user_token(ctx)
     try:
         await ctx.extensions.emit("github-connector.install_disconnected", {
             "imperal_id": ctx.user.imperal_id,
@@ -173,9 +177,17 @@ async def install_callback(ctx, headers: dict, body: str, query_params: dict) ->
     """
     state = query_params.get("state", "")
     installation_id = query_params.get("installation_id", "")
+    code = query_params.get("code", "")
 
-    if not state or not installation_id:
-        return {"status": 400, "body": "Missing state or installation_id."}
+    if not state or not installation_id or not code:
+        # `code` only shows up once "Request user authorization (OAuth) during
+        # installation" is turned on in the App's own settings (§12.1) — a
+        # missing code here almost always means that flag isn't on yet,
+        # not a client bug, so say so plainly rather than a generic 400.
+        missing = "code" if (state and installation_id) else "state or installation_id"
+        return {"status": 400, "body": f"Missing {missing}. If this is a fresh install, make sure "
+                                        "'Request user authorization (OAuth) during installation' is "
+                                        "enabled in the GitHub App's settings."}
 
     imperal_id = await storage.find_and_consume_oauth_state(ctx, state)
     if not imperal_id:
@@ -185,14 +197,16 @@ async def install_callback(ctx, headers: dict, body: str, query_params: dict) ->
         await ctx.log(f"install_callback: rejected — unknown/expired state (installation_id={installation_id})", level="warning")
         return {"status": 400, "body": "Invalid or expired install session. Please retry connecting GitHub from chat."}
 
-    # Verify the installation is actually live and fetch its metadata using a
-    # real installation token — do not trust query params alone.
-    token, err = await github_client.get_installation_token(ctx, installation_id)
+    # Exchange the one-time code for a real user-to-server token (§12.1) —
+    # this IS the credential every tool call authenticates with from here on.
+    token_payload, err = await user_auth.exchange_code_for_token(ctx, code)
     if err:
-        await ctx.log(f"install_callback: token mint failed for installation_id={installation_id}: {err}", level="error")
-        return {"status": 502, "body": f"Could not verify the GitHub installation: {err}"}
+        await ctx.log(f"install_callback: code exchange failed for installation_id={installation_id}: {err}", level="error")
+        return {"status": 502, "body": f"Could not complete GitHub authorization: {err}"}
 
-    resp = await github_client.gh_get(ctx, token, "/installation/repositories")
+    access_token = token_payload["access_token"]
+
+    resp = await github_client.gh_get(ctx, access_token, f"/user/installations/{installation_id}/repositories", {"per_page": 100})
     if resp.status_code >= 400:
         await ctx.log(f"install_callback: repository list fetch failed ({resp.status_code}) for installation_id={installation_id}", level="error")
         return {"status": 502, "body": "Connected, but could not read the repository list from GitHub."}
@@ -202,6 +216,8 @@ async def install_callback(ctx, headers: dict, body: str, query_params: dict) ->
     repo_names = [r.get("full_name", "") for r in repos]
     account_login = repos[0]["owner"]["login"] if repos else ""
 
+    encrypted_record = await user_auth.encrypt_token_record(ctx, token_payload)
+    await storage.save_user_token_for_user(ctx, imperal_id, encrypted_record)
     await storage.save_installation_for_user(ctx, imperal_id, {
         "installation_id": installation_id,
         "account_login": account_login,

@@ -1,26 +1,22 @@
 """Tests for P2 read-only repo browsing tools (handlers_repos.py).
 
-Each test seeds an installation via storage.save_installation, mocks the
-token-mint POST (github_client.get_installation_token's own call) plus the
-GitHub REST GET the tool under test makes, then asserts the reshaped
-ActionResult.
+Each test seeds a valid user-to-server OAuth token via conftest's
+seed_user_token (§12.1 pivot — no installation/JWT mint mock needed any
+more, the token IS the credential), mocks the GitHub REST GET the tool
+under test makes, then asserts the reshaped ActionResult.
 """
 import pytest
 
 from imperal_sdk.testing import MockContext
 
 import handlers_repos
-import storage
-from models import _NoParams, RepoParams, FileContentsParams, ListCommitsParams, SearchCodeParams, ListReleasesParams
+from tests.conftest import seed_user_token
+from models import _NoParams, RepoParams, FileContentsParams, ListCommitsParams, SearchCodeParams, ListReleasesParams, CreateRepositoryParams
 
 
 async def _seeded_ctx(user_id="user-1"):
     ctx = MockContext(user_id=user_id)
-    await storage.save_installation(ctx, {
-        "installation_id": "12345", "account_login": "octocat",
-        "repositories": ["octocat/hello-world"],
-    })
-    ctx.http.mock_post("access_tokens", {"token": "ghs_test_token"})
+    await seed_user_token(ctx)
     return ctx
 
 
@@ -34,12 +30,18 @@ async def test_list_repositories_not_connected_errors():
 @pytest.mark.asyncio
 async def test_list_repositories_success():
     ctx = await _seeded_ctx()
-    ctx.http.mock_get("/installation/repositories", {
+    # More specific pattern registered FIRST — MockHTTP._find matches by
+    # substring in registration order, and "/user/installations" is itself
+    # a substring of the repositories URL below, so order matters here.
+    ctx.http.mock_get("/user/installations/12345/repositories", {
         "repositories": [
             {"id": 1, "name": "hello-world", "full_name": "octocat/hello-world",
              "private": False, "default_branch": "main", "stargazers_count": 42,
              "language": "Python", "html_url": "https://github.com/octocat/hello-world"},
         ],
+    })
+    ctx.http.mock_get("/user/installations", {
+        "installations": [{"id": 12345}],
     })
     result = await handlers_repos.list_repositories(ctx, _NoParams())
     assert result.status == "success"
@@ -179,4 +181,40 @@ async def test_list_releases_not_connected_errors():
     ctx = MockContext(user_id="user-2")
     result = await handlers_repos.list_releases(
         ctx, ListReleasesParams(repo="octocat/hello-world"))
+    assert result.status == "error"
+
+
+@pytest.mark.asyncio
+async def test_create_repository_personal_account():
+    ctx = await _seeded_ctx()
+    ctx.http.mock_post("/user/repos", {
+        "id": 999, "name": "my-new-project", "full_name": "octocat/my-new-project",
+        "private": True, "default_branch": "main", "stargazers_count": 0,
+        "language": None, "html_url": "https://github.com/octocat/my-new-project",
+    })
+    result = await handlers_repos.create_repository(
+        ctx, CreateRepositoryParams(name="my-new-project"))
+    assert result.status == "success"
+    assert result.data.full_name == "octocat/my-new-project"
+
+
+@pytest.mark.asyncio
+async def test_create_repository_org():
+    ctx = await _seeded_ctx()
+    ctx.http.mock_post("/orgs/acme/repos", {
+        "id": 1000, "name": "team-repo", "full_name": "acme/team-repo",
+        "private": False, "default_branch": "main", "stargazers_count": 0,
+        "language": None, "html_url": "https://github.com/acme/team-repo",
+    })
+    result = await handlers_repos.create_repository(
+        ctx, CreateRepositoryParams(name="team-repo", org="acme", private=False))
+    assert result.status == "success"
+    assert result.data.full_name == "acme/team-repo"
+
+
+@pytest.mark.asyncio
+async def test_create_repository_not_connected_errors():
+    ctx = MockContext(user_id="user-2")
+    result = await handlers_repos.create_repository(
+        ctx, CreateRepositoryParams(name="x"))
     assert result.status == "error"

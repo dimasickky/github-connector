@@ -1,6 +1,6 @@
 """github-connector · per-user persistence for GitHub App installations.
 
-Two collections, both partitioned automatically by ctx.user.imperal_id (the
+Collections, all partitioned automatically by ctx.user.imperal_id (the
 same store-partitioning mechanism used by wp-site-connector's `sites`/`creds`
 and spotify's `sp_credentials` — see extensions/github-connector.md §4-5):
 
@@ -16,14 +16,17 @@ and spotify's `sp_credentials` — see extensions/github-connector.md §4-5):
 - `gh_installations` — the real installation record once the callback
   resolves the state back to a real imperal_id: {installation_id,
   account_login, repository_selection, repositories[]}.
-
-No GitHub tokens are ever stored here — installation tokens are minted fresh
-per tool-call (see auth.py) and never persisted, matching §4's "even simpler
-than Spotify" design (no refresh-token to keep either).
+- `gh_user_tokens` — the user-to-server OAuth token (§12.1 pivot, 2026-07-23):
+  encrypted access_token + refresh_token + absolute expiry timestamps (see
+  user_auth.py for the encrypt/decrypt/refresh logic). Installation tokens
+  are no longer used for real API calls — this IS the credential every tool
+  call authenticates with now, so unlike the pre-pivot design it MUST be
+  persisted and kept fresh.
 """
 
 OAUTH_STATES_COLLECTION = "gh_oauth_states"
 INSTALLATIONS_COLLECTION = "gh_installations"
+USER_TOKENS_COLLECTION = "gh_user_tokens"
 # Reverse index installation_id -> imperal_id, written under the shared
 # "__webhook__" partition (same trick as gh_oauth_states) so the UNAUTHENTICATED
 # webhook_events handler — which receives only a GitHub installation_id in the
@@ -207,3 +210,41 @@ async def delete_installation(ctx) -> None:
     existing = await ctx.store.query(INSTALLATIONS_COLLECTION, limit=1)
     if existing.data:
         await ctx.store.delete(INSTALLATIONS_COLLECTION, existing.data[0].id)
+
+
+# ── User-to-server OAuth token (§12.1 pivot) ────────────────────────────── #
+
+async def save_user_token_for_user(webhook_ctx, imperal_id: str, encrypted_record: dict) -> None:
+    """Called from the unauthenticated install_callback once the state token
+    has been resolved to a real imperal_id — writes the encrypted token
+    record into THAT user's own store partition, mirroring
+    save_installation_for_user's shape exactly."""
+    store = _store_for(webhook_ctx, imperal_id)
+    existing = await store.query(USER_TOKENS_COLLECTION, limit=1)
+    if existing.data:
+        await store.update(USER_TOKENS_COLLECTION, existing.data[0].id, encrypted_record)
+    else:
+        await store.create(USER_TOKENS_COLLECTION, encrypted_record)
+
+
+async def get_user_token(ctx) -> dict | None:
+    """Return this user's encrypted token record (dict) or None if not
+    connected. Caller (github_client.get_user_token) decrypts it."""
+    page = await ctx.store.query(USER_TOKENS_COLLECTION, limit=1)
+    return page.data[0].data if page.data else None
+
+
+async def save_user_token(ctx, encrypted_record: dict) -> None:
+    """Called from an AUTHENTICATED context (e.g. after a token refresh) —
+    writes into the calling user's own partition directly via ctx.store."""
+    existing = await ctx.store.query(USER_TOKENS_COLLECTION, limit=1)
+    if existing.data:
+        await ctx.store.update(USER_TOKENS_COLLECTION, existing.data[0].id, encrypted_record)
+    else:
+        await ctx.store.create(USER_TOKENS_COLLECTION, encrypted_record)
+
+
+async def delete_user_token(ctx) -> None:
+    existing = await ctx.store.query(USER_TOKENS_COLLECTION, limit=1)
+    if existing.data:
+        await ctx.store.delete(USER_TOKENS_COLLECTION, existing.data[0].id)

@@ -1,12 +1,12 @@
 """github-connector · P2 read-only repository browsing tools.
 
 list_repositories, get_file_contents, list_recent_commits, list_contributors —
-all thin wrappers: resolve this user's installation -> mint a fresh
-installation token -> call the matching GitHub REST endpoint via
-github_client.gh_get -> reshape into an sdl.Entity/EntityList result.
+all thin wrappers: resolve this user's OAuth token (refreshing if needed) ->
+call the matching GitHub REST endpoint via github_client.gh_get -> reshape
+into an sdl.Entity/EntityList result.
 
-Every tool starts the same way (installation lookup + token mint), so that
-shared prelude lives in `_get_token(ctx)` to avoid repeating it four times.
+Every tool starts the same way (token resolution), so that shared prelude
+lives in `_get_token(ctx)` to avoid repeating it in every handler.
 """
 import base64
 
@@ -16,27 +16,21 @@ from error_codes import GH_NOT_CONNECTED, GH_REPO_NOT_ACCESSIBLE, GH_FILE_NOT_FO
 from imperal_sdk.chat.error_codes import INTERNAL
 from models import (
     _NoParams, RepoParams, FileContentsParams, ListCommitsParams,
-    SearchCodeParams, ListReleasesParams,
+    SearchCodeParams, ListReleasesParams, CreateRepositoryParams,
     Repository, FileEntry, FileContent, Commit, Contributor,
     CodeSearchResult, Release,
 )
 import github_client
-import storage
 
 
 async def _get_token(ctx):
-    """Resolve this user's installation and mint a fresh installation token.
-    Returns (token, error_result) — exactly one of the two is not-None,
-    mirroring the (data, error) tuple shape github_client.py already uses."""
-    installation = await storage.get_installation(ctx)
-    if not installation:
-        return None, ActionResult.error(
-            "No GitHub account connected — use start_github_install first.",
-            retryable=False, code=GH_NOT_CONNECTED,
-        )
-    token, err = await github_client.get_installation_token(ctx, installation["installation_id"])
+    """Resolve this user's user-to-server OAuth token (refreshing it first if
+    it's close to expiry). Returns (token, error_result) — exactly one of the
+    two is not-None, mirroring the (data, error) tuple shape github_client.py
+    already uses."""
+    token, err = await github_client.get_user_token(ctx)
     if err:
-        return None, ActionResult.error(err, retryable=True, code=GH_NOT_CONNECTED)
+        return None, ActionResult.error(err, retryable=False, code=GH_NOT_CONNECTED)
     return token, None
 
 
@@ -52,15 +46,25 @@ def _split_repo(repo: str) -> tuple[str, str]:
     data_model=sdl.EntityList[Repository],
 )
 async def list_repositories(ctx, params: _NoParams) -> ActionResult:
-    """List repositories covered by the current installation."""
+    """List repositories this user's token can see (intersection of what they
+    picked at GitHub App install time and what they personally have access
+    to — GitHub's own scoping rule for user-to-server tokens)."""
     token, err = await _get_token(ctx)
     if err:
         return err
-    resp = await github_client.gh_get(ctx, token, "/installation/repositories", {"per_page": 100})
+    resp = await github_client.gh_get(ctx, token, "/user/installations", {"per_page": 100})
     if resp.status_code != 200:
         return ActionResult.error(github_client.gh_error_message(resp.status_code),
                                   retryable=resp.status_code >= 500, code=GH_REPO_NOT_ACCESSIBLE)
-    repos = resp.json().get("repositories", [])
+    installations = resp.json().get("installations", [])
+    repos: list[dict] = []
+    for inst in installations:
+        inst_id = inst.get("id")
+        repo_resp = await github_client.gh_get(
+            ctx, token, f"/user/installations/{inst_id}/repositories", {"per_page": 100},
+        )
+        if repo_resp.status_code == 200:
+            repos.extend(repo_resp.json().get("repositories", []))
     items = [
         Repository(
             id=str(r["id"]), title=r.get("name", ""), kind="gh_repo",
@@ -72,6 +76,52 @@ async def list_repositories(ctx, params: _NoParams) -> ActionResult:
         for r in repos
     ]
     return ActionResult.success(sdl.EntityList[Repository](items=items), summary=f"{len(items)} repositor{'y' if len(items)==1 else 'ies'}")
+
+
+@chat.function(
+    "create_repository",
+    description=(
+        "Create a new GitHub repository — in your personal account, or inside "
+        "an organization you belong to (pass org=). Only possible now that "
+        "we act as your real GitHub user (§12.1) — a plain App-bot identity "
+        "cannot create personal-account repositories, GitHub blocks that."
+    ),
+    action_type="write",
+    data_model=Repository,
+    effects=["github.create_repository"],
+    event="github-connector-extension.create_repository",
+)
+async def create_repository(ctx, params: CreateRepositoryParams) -> ActionResult:
+    """POST /user/repos (personal account) or POST /orgs/{org}/repos (org) —
+    the one operation that genuinely requires a user-to-server token; an
+    installation token gets a 403 on /user/repos no matter its permissions."""
+    token, err = await _get_token(ctx)
+    if err:
+        return err
+
+    body = {
+        "name": params.name,
+        "private": params.private,
+        "auto_init": params.auto_init,
+    }
+    if params.description:
+        body["description"] = params.description
+
+    path = f"/orgs/{params.org}/repos" if params.org else "/user/repos"
+    resp = await github_client.gh_post(ctx, token, path, json_body=body)
+    if resp.status_code >= 400:
+        return ActionResult.error(github_client.gh_error_message(resp.status_code),
+                                  retryable=resp.status_code >= 500, code=GH_REPO_NOT_ACCESSIBLE)
+
+    r = resp.json()
+    repo = Repository(
+        id=str(r["id"]), title=r.get("name", ""), kind="gh_repo",
+        full_name=r.get("full_name", ""), private=r.get("private", False),
+        default_branch=r.get("default_branch", "main"),
+        stars=r.get("stargazers_count", 0), language=r.get("language") or "",
+        url=r.get("html_url", ""),
+    )
+    return ActionResult.success(repo, summary=f"Created repository {repo.full_name}")
 
 
 @chat.function(

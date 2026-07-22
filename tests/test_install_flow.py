@@ -66,7 +66,7 @@ async def test_install_callback_rejects_unknown_state():
     ctx = MockContext(user_id="__webhook__")
     resp = await auth.install_callback(
         ctx, headers={}, body="",
-        query_params={"state": "forged-state", "installation_id": "999"},
+        query_params={"state": "forged-state", "installation_id": "999", "code": "some-code"},
     )
     assert resp["status"] == 400
     assert "Invalid or expired" in resp["body"]
@@ -88,11 +88,12 @@ async def test_full_install_round_trip_saves_installation_and_emits_event():
     webhook_ctx.http = user_ctx.http
 
     webhook_ctx.http.mock_post(
-        "/app/installations/555/access_tokens",
-        {"token": "ghs_faketoken"},
+        "login/oauth/access_token",
+        {"access_token": "ghu_faketoken", "refresh_token": "ghr_fakerefresh",
+         "expires_in": 28800, "refresh_token_expires_in": 15811200},
     )
     webhook_ctx.http.mock_get(
-        "/installation/repositories",
+        "/user/installations/555/repositories",
         {"repositories": [
             {"full_name": "dimasickky/repo-one", "owner": {"login": "dimasickky"}},
             {"full_name": "dimasickky/repo-two", "owner": {"login": "dimasickky"}},
@@ -101,7 +102,7 @@ async def test_full_install_round_trip_saves_installation_and_emits_event():
 
     resp = await auth.install_callback(
         webhook_ctx, headers={}, body="",
-        query_params={"state": state, "installation_id": "555"},
+        query_params={"state": state, "installation_id": "555", "code": "fake-code"},
     )
     assert resp["status"] == 200
     assert "2 repositories" in resp["body"]
@@ -110,6 +111,9 @@ async def test_full_install_round_trip_saves_installation_and_emits_event():
     assert installation is not None
     assert installation["account_login"] == "dimasickky"
     assert installation["repositories"] == ["dimasickky/repo-one", "dimasickky/repo-two"]
+
+    token_record = await storage.get_user_token(user_ctx)
+    assert token_record is not None
 
 
 class _FakeProdExtensionsClient:
@@ -142,8 +146,11 @@ async def test_install_callback_emits_event_scoped_to_real_user_not_webhook(monk
     webhook_ctx.secrets = user_ctx.secrets
     webhook_ctx.http = user_ctx.http
 
-    webhook_ctx.http.mock_post("/app/installations/777/access_tokens", {"token": "ghs_faketoken"})
-    webhook_ctx.http.mock_get("/installation/repositories", {"repositories": [
+    webhook_ctx.http.mock_post("login/oauth/access_token", {
+        "access_token": "ghu_faketoken", "refresh_token": "ghr_fakerefresh",
+        "expires_in": 28800, "refresh_token_expires_in": 15811200,
+    })
+    webhook_ctx.http.mock_get("/user/installations/777/repositories", {"repositories": [
         {"full_name": "dimasickky/repo-x", "owner": {"login": "dimasickky"}},
     ]})
 
@@ -158,7 +165,7 @@ async def test_install_callback_emits_event_scoped_to_real_user_not_webhook(monk
 
     resp = await auth.install_callback(
         webhook_ctx, headers={}, body="",
-        query_params={"state": state, "installation_id": "777"},
+        query_params={"state": state, "installation_id": "777", "code": "fake-code"},
     )
     assert resp["status"] == 200
     assert seen_user_ids == ["user-77"]  # real user, never "__webhook__"

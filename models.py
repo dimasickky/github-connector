@@ -37,6 +37,14 @@ class ListReleasesParams(BaseModel):
     limit: int = Field(default=20, ge=1, le=100, description="Max releases to return, 1-100")
 
 
+class CreateRepositoryParams(BaseModel):
+    name: str = Field(description="New repository name, e.g. 'my-new-project'")
+    org: str = Field(default="", description="Create it inside this organization instead of the user's personal account. Empty = personal account.")
+    private: bool = Field(default=True, description="Private repository (default) or public")
+    description: str = Field(default="", description="Optional short repository description")
+    auto_init: bool = Field(default=True, description="Initialize with a README so the repo isn't empty (default true)")
+
+
 class Repository(sdl.Entity):
     full_name: str = ""
     private: bool = False

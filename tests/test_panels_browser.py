@@ -8,16 +8,12 @@ import pytest
 from imperal_sdk.testing import MockContext
 
 import panels_browser
-import storage
+from tests.conftest import seed_user_token
 
 
 async def _seeded_ctx(user_id="user-1"):
     ctx = MockContext(user_id=user_id)
-    await storage.save_installation(ctx, {
-        "installation_id": "12345", "account_login": "octocat",
-        "repositories": ["octocat/hello-world"],
-    })
-    ctx.http.mock_post("access_tokens", {"token": "ghs_test_token"})
+    await seed_user_token(ctx)
     return ctx
 
 

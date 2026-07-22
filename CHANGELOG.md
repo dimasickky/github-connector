@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.6.0 — 2026-07-23 — Full migration to user-to-server OAuth
+
+### Changed (breaking, internal)
+
+- **Every API call now authenticates as the real GitHub user, not the App's own bot identity.** Installation-token minting (App-level JWT signed with the App's private key) is removed from the codebase entirely — `get_installation_token` is gone, replaced by `get_user_token` which resolves a stored, encrypted, auto-refreshing user-to-server OAuth token.
+- `install_callback` now reads a `code` query param (present once "Request user authorization (OAuth) during installation" is enabled in the GitHub App's settings) and exchanges it for a user access token + refresh token pair (`user_auth.exchange_code_for_token`), persisted encrypted (Fernet, new `github_encryption_key` secret) in a new `gh_user_tokens` store collection. Tokens auto-refresh ~5 minutes before their ~8h expiry; the refresh token itself rotates on every use (~6mo sliding window).
+- Secrets: `github_app_id` / `github_app_private_key` removed. Added `github_client_id`, `github_client_secret`, `github_encryption_key`. `github_app_slug` / `github_webhook_secret` unchanged.
+- `list_repositories` now reads from `/user/installations` + `/user/installations/{id}/repositories` (user-token-compatible) instead of `/installation/repositories` (installation-token-only).
+
+### Added
+
+- **`create_repository`** — create a new repo in your personal account or an org you belong to. This is the concrete capability an installation token could never provide (`POST /user/repos` hard-rejects installation tokens regardless of permissions) — the actual motivation for this migration.
+
+### Why this release
+
+`create_repository` was requested and turned out to be structurally impossible on the old installation-token-only model — a GitHub platform restriction, not a bug. Rather than bolt on a narrow OAuth carve-out for just that one tool, the whole extension was moved to user-to-server auth: same GitHub App, same per-repository scoping (GitHub docs confirm a user access token is the *intersection* of what the user picked at install time and what they personally can access — never broader), but no more artificial ceiling on which GitHub REST endpoints are reachable going forward.
+
+### Tests
+65/65 tests passing (62 existing, migrated off installation-token mocks onto a seeded user-token fixture, + 3 new for `create_repository`). `imperal validate .`: 0 errors, 0 warnings, 1 informational note (unchanged, no `@ext.on_install` hook).
+
+### Deploy blocker
+Not yet deployed. Requires from the GitHub App owner: (1) the App's OAuth **Client Secret** (Developer settings → GitHub Apps → your app → General → Client secrets), saved as the `github_client_secret` secret; (2) **"Request user authorization (OAuth) during installation"** enabled in the same settings page — without it GitHub's install redirect won't carry the `code` param `install_callback` now requires.
+
 ## v0.4.0 — 2026-07-21 — Pull request reviews, single-item lookup, labels/assignees/draft
 
 ### Added

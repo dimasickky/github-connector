@@ -8,7 +8,7 @@ from imperal_sdk.testing import MockContext
 import handlers_content
 import handlers_pulls
 import handlers_issues
-import storage
+from tests.conftest import seed_user_token
 from models import (
     CreateBranchParams, CreateOrUpdateFileParams, CreatePullRequestParams,
     CreateIssueParams, CommentParams, GetPullRequestParams, GetIssueParams,
@@ -18,11 +18,7 @@ from models import (
 
 async def _seeded_ctx(user_id="user-1"):
     ctx = MockContext(user_id=user_id)
-    await storage.save_installation(ctx, {
-        "installation_id": "12345", "account_login": "octocat",
-        "repositories": ["octocat/hello-world"],
-    })
-    ctx.http.mock_post("access_tokens", {"token": "ghs_test_token"})
+    await seed_user_token(ctx)
     return ctx
 
 
