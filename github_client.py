@@ -1,12 +1,14 @@
 """github-connector · thin GitHub REST client + user-token resolution.
 
-Per extensions/github-connector.md §12.1 (2026-07-23 pivot): every real API
-call now authenticates as the GitHub user themselves (user-to-server OAuth
-token, see user_auth.py), not as the App's own bot identity. `get_user_token`
-resolves this user's stored encrypted token record, transparently refreshes
-it if it's within 5 minutes of expiry (persisting the refreshed pair back —
-GitHub rotates the refresh_token on every use), and returns a ready-to-use
-bearer token string. Everything else in this module is a thin `ctx.http`
+Per extensions/github-connector.md §12.2 (2026-07-23, second pivot: GitHub
+App -> classic OAuth App): every real API call authenticates as the GitHub
+user themselves (classic OAuth token, see user_auth.py), not as any kind of
+App-level bot identity. `get_user_token` resolves this user's stored
+encrypted token record and returns a ready-to-use bearer token string — no
+refresh cycle needed here (classic OAuth App tokens don't expire; see
+user_auth.py's module docstring for why). A 401 from GitHub means the token
+was revoked/the authorization was removed — the fix is always "reconnect",
+never a refresh call. Everything else in this module is a thin `ctx.http`
 wrapper over the GitHub REST API using that token, following the same shape
 as wp-site-connector's `wp_client.py`.
 """
@@ -39,27 +41,16 @@ _ERROR_MESSAGES = {
 
 
 async def get_user_token(ctx) -> tuple[str | None, str | None]:
-    """Resolve this user's stored user-to-server OAuth token, refreshing it
-    first if it's close to expiry. Returns (token, error_message)."""
+    """Resolve this user's stored classic OAuth access token. Returns
+    (token, error_message). No refresh logic — classic OAuth App tokens
+    don't expire; a stored-but-revoked token surfaces as a 401 from GitHub
+    itself on the actual API call, not as something detectable here."""
     record = await storage.get_user_token(ctx)
     if not record:
-        return None, "No GitHub account connected — use start_github_install first."
+        return None, "No GitHub account connected — use connect_github first."
 
     decrypted = await user_auth.decrypt_token_record(ctx, record)
-
-    if user_auth.refresh_token_expired(decrypted):
-        return None, "Your GitHub authorization has expired — reconnect GitHub from the sidebar."
-
-    if not user_auth.access_token_needs_refresh(decrypted):
-        return decrypted["access_token"], None
-
-    refreshed, err = await user_auth.refresh_user_token(ctx, decrypted["refresh_token"])
-    if err:
-        return None, f"Could not refresh your GitHub authorization: {err}"
-
-    new_record = await user_auth.encrypt_token_record(ctx, refreshed)
-    await storage.save_user_token(ctx, new_record)
-    return refreshed["access_token"], None
+    return decrypted["access_token"], None
 
 
 async def gh_get(ctx, token: str, path: str, params: dict | None = None):

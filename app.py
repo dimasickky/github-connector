@@ -2,7 +2,7 @@ from imperal_sdk import Extension, ChatExtension
 
 ext = Extension(
     "github-connector-extension",
-    version="0.6.0",
+    version="0.7.0",
     capabilities=["vcs:read", "vcs:write", "vcs:merge", "vcs:admin", "ci:trigger", "auth:oauth"],
     display_name="GitHub Connector",
     description=(
@@ -19,52 +19,44 @@ chat = ChatExtension(
 )
 
 
-# ─── Secrets (app-scope: developer-owned GitHub App identity, shared by all users) ── #
-# Per-user data (which installation_id belongs to which Imperal user, which
-# repos it covers) lives in ctx.store — see storage.py. These two secrets are
-# the GitHub App's own identity, the same for every user of this extension.
-
-ext.secret(
-    name="github_app_slug",
-    description=(
-        "The GitHub App's URL slug, e.g. 'webbee-imperal' for "
-        "github.com/apps/webbee-imperal — shown in the App's settings URL "
-        "on github.com. Public by nature (it's part of a public URL), but "
-        "declared as a secret for consistency with the rest of the App's "
-        "identity and to keep it configurable without a code change."
-    ),
-    scope="app",
-    required=True,
-    max_bytes=128,
-)(lambda: None)
+# ─── Secrets (app-scope: developer-owned GitHub OAuth App identity, shared
+# by all users). Per-user data (connection status, per-repo webhook
+# registrations) lives in ctx.store — see storage.py. These secrets are the
+# OAuth App's own identity, the same for every user of this extension.
+# Per extensions/github-connector.md §12.2 (2026-07-23 second pivot: GitHub
+# App -> classic OAuth App) — no more App-level identity (no app slug, no
+# installation JWT signing key) needed at all; a classic OAuth App only ever
+# needs a client_id/client_secret pair, same shape as spotify/google/etc. ── #
 
 ext.secret(
     name="github_webhook_secret",
     description=(
-        "Shared secret configured in the GitHub App's Webhook settings, used "
-        "to verify that incoming setup-callback requests really come from "
-        "GitHub (HMAC-SHA256 signature check) before trusting them."
+        "Shared secret used to sign per-repo webhooks this extension "
+        "registers on GitHub (one per repo with notifications enabled, see "
+        "handlers_webhook_events.py) — verifies that incoming event "
+        "deliveries really come from GitHub (HMAC-SHA256 signature check) "
+        "before trusting them. Generate any random string; it's set as the "
+        "webhook's own secret at registration time, not read from GitHub."
     ),
     scope="app",
-    required=False,
+    required=True,
     max_bytes=256,
 )(lambda: None)
 
-# ─── User-to-server OAuth (adds acting-as-the-user on top of the App's own
-# installation-token identity — needed for endpoints GitHub reserves for a
-# real user (§12.1, 2026-07-23 pivot: this is now the ONLY auth mechanism —
-# no App-level JWT/installation token is minted anywhere in this codebase).
-# Requires "Request user authorization (OAuth) during installation" enabled
-# in the GitHub App's own settings so GitHub's install redirect includes a
-# `code` param. ── #
+# ─── Classic OAuth App credentials (§12.2, 2026-07-23) — replaces the
+# GitHub App + user-to-server OAuth design (§12.1). Register a classic OAuth
+# App at github.com/settings/developers → OAuth Apps → New OAuth App, with
+# Authorization callback URL = this extension's ctx.webhook_url("oauth_callback")
+# value (visible from connect_github's return value / the sidebar's Connect
+# button target once client_id is set). ── #
 
 ext.secret(
     name="github_client_id",
     description=(
-        "The GitHub App's OAuth Client ID (Developer settings → GitHub Apps "
-        "→ your app → General). Public by nature (sent in browser redirect "
-        "URLs), declared as a secret only for consistency with the rest of "
-        "the App's identity."
+        "The classic OAuth App's Client ID (Developer settings → OAuth Apps "
+        "→ your app). Public by nature (sent in browser redirect URLs), "
+        "declared as a secret only for consistency with the rest of the "
+        "App's identity."
     ),
     scope="app",
     required=True,
@@ -74,10 +66,10 @@ ext.secret(
 ext.secret(
     name="github_client_secret",
     description=(
-        "The GitHub App's OAuth Client Secret (Developer settings → GitHub "
-        "Apps → your app → General → Client secrets → Generate a new client "
-        "secret). Used server-side only, to exchange an authorization `code` "
-        "for a user access token — never sent to the browser, never logged."
+        "The classic OAuth App's Client Secret (Developer settings → OAuth "
+        "Apps → your app → Generate a new client secret). Used server-side "
+        "only, to exchange an authorization `code` for an access token — "
+        "never sent to the browser, never logged."
     ),
     scope="app",
     required=True,

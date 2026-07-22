@@ -30,19 +30,13 @@ async def test_list_repositories_not_connected_errors():
 @pytest.mark.asyncio
 async def test_list_repositories_success():
     ctx = await _seeded_ctx()
-    # More specific pattern registered FIRST — MockHTTP._find matches by
-    # substring in registration order, and "/user/installations" is itself
-    # a substring of the repositories URL below, so order matters here.
-    ctx.http.mock_get("/user/installations/12345/repositories", {
-        "repositories": [
-            {"id": 1, "name": "hello-world", "full_name": "octocat/hello-world",
-             "private": False, "default_branch": "main", "stargazers_count": 42,
-             "language": "Python", "html_url": "https://github.com/octocat/hello-world"},
-        ],
-    })
-    ctx.http.mock_get("/user/installations", {
-        "installations": [{"id": 12345}],
-    })
+    # §12.2: no installation concept any more — a classic OAuth token just
+    # lists everything the account can reach via GET /user/repos directly.
+    ctx.http.mock_get("/user/repos", [
+        {"id": 1, "name": "hello-world", "full_name": "octocat/hello-world",
+         "private": False, "default_branch": "main", "stargazers_count": 42,
+         "language": "Python", "html_url": "https://github.com/octocat/hello-world"},
+    ])
     result = await handlers_repos.list_repositories(ctx, _NoParams())
     assert result.status == "success"
     assert len(result.data.items) == 1

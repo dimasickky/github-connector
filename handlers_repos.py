@@ -1,9 +1,9 @@
 """github-connector · P2 read-only repository browsing tools.
 
 list_repositories, get_file_contents, list_recent_commits, list_contributors —
-all thin wrappers: resolve this user's OAuth token (refreshing if needed) ->
-call the matching GitHub REST endpoint via github_client.gh_get -> reshape
-into an sdl.Entity/EntityList result.
+all thin wrappers: resolve this user's classic OAuth token -> call the
+matching GitHub REST endpoint via github_client.gh_get -> reshape into an
+sdl.Entity/EntityList result.
 
 Every tool starts the same way (token resolution), so that shared prelude
 lives in `_get_token(ctx)` to avoid repeating it in every handler.
@@ -24,10 +24,9 @@ import github_client
 
 
 async def _get_token(ctx):
-    """Resolve this user's user-to-server OAuth token (refreshing it first if
-    it's close to expiry). Returns (token, error_result) — exactly one of the
-    two is not-None, mirroring the (data, error) tuple shape github_client.py
-    already uses."""
+    """Resolve this user's classic OAuth access token. Returns (token,
+    error_result) — exactly one of the two is not-None, mirroring the
+    (data, error) tuple shape github_client.py already uses."""
     token, err = await github_client.get_user_token(ctx)
     if err:
         return None, ActionResult.error(err, retryable=False, code=GH_NOT_CONNECTED)
@@ -41,30 +40,25 @@ def _split_repo(repo: str) -> tuple[str, str]:
 
 @chat.function(
     "list_repositories",
-    description="List the GitHub repositories this account's App installation has access to.",
+    description="List the GitHub repositories your connected account has access to (owned, collaborator, and organization repos).",
     action_type="read",
     data_model=sdl.EntityList[Repository],
 )
 async def list_repositories(ctx, params: _NoParams) -> ActionResult:
-    """List repositories this user's token can see (intersection of what they
-    picked at GitHub App install time and what they personally have access
-    to — GitHub's own scoping rule for user-to-server tokens)."""
+    """GET /user/repos — a classic OAuth token has no installation concept
+    (§12.2), so this simply lists every repo the connected account can
+    reach with the granted scopes (affiliation=owner,collaborator,
+    organization_member covers all three relationships in one call)."""
     token, err = await _get_token(ctx)
     if err:
         return err
-    resp = await github_client.gh_get(ctx, token, "/user/installations", {"per_page": 100})
+    resp = await github_client.gh_get(ctx, token, "/user/repos", {
+        "per_page": 100, "affiliation": "owner,collaborator,organization_member", "sort": "updated",
+    })
     if resp.status_code != 200:
         return ActionResult.error(github_client.gh_error_message(resp.status_code),
                                   retryable=resp.status_code >= 500, code=GH_REPO_NOT_ACCESSIBLE)
-    installations = resp.json().get("installations", [])
-    repos: list[dict] = []
-    for inst in installations:
-        inst_id = inst.get("id")
-        repo_resp = await github_client.gh_get(
-            ctx, token, f"/user/installations/{inst_id}/repositories", {"per_page": 100},
-        )
-        if repo_resp.status_code == 200:
-            repos.extend(repo_resp.json().get("repositories", []))
+    repos = resp.json()
     items = [
         Repository(
             id=str(r["id"]), title=r.get("name", ""), kind="gh_repo",
@@ -82,9 +76,7 @@ async def list_repositories(ctx, params: _NoParams) -> ActionResult:
     "create_repository",
     description=(
         "Create a new GitHub repository — in your personal account, or inside "
-        "an organization you belong to (pass org=). Only possible now that "
-        "we act as your real GitHub user (§12.1) — a plain App-bot identity "
-        "cannot create personal-account repositories, GitHub blocks that."
+        "an organization you belong to (pass org=)."
     ),
     action_type="write",
     data_model=Repository,
@@ -93,8 +85,8 @@ async def list_repositories(ctx, params: _NoParams) -> ActionResult:
 )
 async def create_repository(ctx, params: CreateRepositoryParams) -> ActionResult:
     """POST /user/repos (personal account) or POST /orgs/{org}/repos (org) —
-    the one operation that genuinely requires a user-to-server token; an
-    installation token gets a 403 on /user/repos no matter its permissions."""
+    both work with a classic OAuth token's `repo` scope (§12.2); the earlier
+    GitHub App user-to-server token could not reach /user/repos at all."""
     token, err = await _get_token(ctx)
     if err:
         return err

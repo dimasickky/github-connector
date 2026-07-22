@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.11",
   "app_id": "github-connector-extension",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "name": "GitHub Connector",
   "description": "Browse your GitHub repositories, view code and commit history, and manage pull requests and issues directly from chat.",
   "icon": "icon.svg",
@@ -18,8 +18,8 @@
   ],
   "tools": [
     {
-      "name": "start_github_install",
-      "description": "Get the link to connect GitHub — opens GitHub's own installation page where you pick which repositories to grant access to. Use this when the user wants to connect/link their GitHub account.",
+      "name": "connect_github",
+      "description": "Get the link to connect your GitHub account — opens GitHub's own authorization page. Use this when the user wants to connect/link their GitHub account.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -31,16 +31,16 @@
       },
       "return_schema": {
         "properties": {
-          "install_url": {
-            "description": "Open this URL to install/authorize the GitHub App on your chosen repositories",
-            "title": "Install Url",
+          "authorize_url": {
+            "description": "Open this URL to authorize GitHub access",
+            "title": "Authorize Url",
             "type": "string"
           }
         },
         "required": [
-          "install_url"
+          "authorize_url"
         ],
-        "title": "StartInstallResult",
+        "title": "ConnectResult",
         "type": "object"
       },
       "event": "",
@@ -51,7 +51,7 @@
     },
     {
       "name": "disconnect_github",
-      "description": "Disconnect your GitHub account — removes the stored installation record. GitHub's own App installation is not touched (uninstall it from github.com/settings/installations if you also want that gone); this just makes Imperal forget about it. Requires an explicit confirm=true on a second call — the first call only previews.",
+      "description": "Disconnect your GitHub account — removes the stored access token. GitHub's own authorization record is not revoked automatically (revoke it from github.com/settings/applications if you also want that gone); this just makes Imperal forget about it. Requires an explicit confirm=true on a second call — the first call only previews.",
       "action_type": "destructive",
       "chain_callable": true,
       "effects": [
@@ -172,7 +172,7 @@
     },
     {
       "name": "list_repositories",
-      "description": "List the GitHub repositories this account's App installation has access to.",
+      "description": "List the GitHub repositories your connected account has access to (owned, collaborator, and organization repos).",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -342,7 +342,7 @@
     },
     {
       "name": "create_repository",
-      "description": "Create a new GitHub repository — in your personal account, or inside an organization you belong to (pass org=). Only possible now that we act as your real GitHub user (§12.1) — a plain App-bot identity cannot create personal-account repositories, GitHub blocks that.",
+      "description": "Create a new GitHub repository — in your personal account, or inside an organization you belong to (pass org=).",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -3832,6 +3832,242 @@
       "long_running": false,
       "scopes": [],
       "owner_chat_tool": "github-connector"
+    },
+    {
+      "name": "enable_repo_notifications",
+      "description": "Turn on live GitHub notifications for one repo — get notified in Imperal (bell/telegram/email per your notification settings) when an issue/PR opens, your review is requested, a PR merges, CI fails, or someone pushes to the default branch. Registers a real webhook on that repo (requires admin access to it on GitHub's side).",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "github.enable_notifications"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo' — from list_repositories",
+            "title": "Repo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "title": "_RepoParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "repo": {
+            "default": "",
+            "title": "Repo",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "RepoNotificationResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "github-connector-extension.enable_repo_notifications",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
+      "name": "disable_repo_notifications",
+      "description": "Turn off live GitHub notifications for one repo and remove its webhook.",
+      "action_type": "write",
+      "chain_callable": true,
+      "effects": [
+        "github.disable_notifications"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo' — from list_repositories",
+            "title": "Repo",
+            "type": "string"
+          }
+        },
+        "required": [
+          "repo"
+        ],
+        "title": "_RepoParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "title": "Id"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "kind": {
+            "default": "",
+            "title": "Kind",
+            "type": "string"
+          },
+          "subtitle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Subtitle"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Description"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Status"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Url"
+          },
+          "repo": {
+            "default": "",
+            "title": "Repo",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "RepoNotificationResult",
+        "type": "object",
+        "x-sdl": "entity"
+      },
+      "event": "github-connector-extension.disable_repo_notifications",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
     }
   ],
   "signals": [],
@@ -3840,7 +4076,7 @@
   "icon_size_bytes": 891,
   "webhooks": [
     {
-      "path": "/install_callback",
+      "path": "/oauth_callback",
       "method": "GET",
       "secret_header": ""
     },
@@ -3857,24 +4093,16 @@
   },
   "secrets": [
     {
-      "name": "github_app_slug",
-      "description": "The GitHub App's URL slug, e.g. 'webbee-imperal' for github.com/apps/webbee-imperal — shown in the App's settings URL on github.com. Public by nature (it's part of a public URL), but declared as a secret for consistency with the rest of the App's identity and to keep it configurable without a code change.",
-      "required": true,
-      "write_mode": "user",
-      "max_bytes": 128,
-      "scope": "app"
-    },
-    {
       "name": "github_webhook_secret",
-      "description": "Shared secret configured in the GitHub App's Webhook settings, used to verify that incoming setup-callback requests really come from GitHub (HMAC-SHA256 signature check) before trusting them.",
-      "required": false,
+      "description": "Shared secret used to sign per-repo webhooks this extension registers on GitHub (one per repo with notifications enabled, see handlers_webhook_events.py) — verifies that incoming event deliveries really come from GitHub (HMAC-SHA256 signature check) before trusting them. Generate any random string; it's set as the webhook's own secret at registration time, not read from GitHub.",
+      "required": true,
       "write_mode": "user",
       "max_bytes": 256,
       "scope": "app"
     },
     {
       "name": "github_client_id",
-      "description": "The GitHub App's OAuth Client ID (Developer settings → GitHub Apps → your app → General). Public by nature (sent in browser redirect URLs), declared as a secret only for consistency with the rest of the App's identity.",
+      "description": "The classic OAuth App's Client ID (Developer settings → OAuth Apps → your app). Public by nature (sent in browser redirect URLs), declared as a secret only for consistency with the rest of the App's identity.",
       "required": true,
       "write_mode": "user",
       "max_bytes": 128,
@@ -3882,7 +4110,7 @@
     },
     {
       "name": "github_client_secret",
-      "description": "The GitHub App's OAuth Client Secret (Developer settings → GitHub Apps → your app → General → Client secrets → Generate a new client secret). Used server-side only, to exchange an authorization `code` for a user access token — never sent to the browser, never logged.",
+      "description": "The classic OAuth App's Client Secret (Developer settings → OAuth Apps → your app → Generate a new client secret). Used server-side only, to exchange an authorization `code` for an access token — never sent to the browser, never logged.",
       "required": true,
       "write_mode": "user",
       "max_bytes": 256,

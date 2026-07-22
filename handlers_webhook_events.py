@@ -1,44 +1,187 @@
-"""github-connector · real GitHub App webhook event delivery -> notifications.
+"""github-connector · per-repo webhook notifications (classic OAuth App model).
 
-Distinct from `auth.py`'s `install_callback` (a GET redirect from the
-browser after the install-page flow finishes). This module is the *other*
-kind of GitHub webhook: signed POST deliveries GitHub sends for repo/org
-events (issues, pull_request, workflow_run, push, ...) once the App is
-installed and configured with a Webhook URL + secret in its GitHub settings.
+Per extensions/github-connector.md §12.2 (2026-07-23 second pivot: GitHub App
+-> classic OAuth App): a classic OAuth App has NO centralized, App-level
+webhook the way a GitHub App does — GitHub only lets you subscribe to repo
+events by registering a webhook on that specific repo
+(`POST /repos/{owner}/{repo}/hooks`), one at a time, with the `admin:repo_hook`
+scope. There's also no more "every connected repo notifies automatically"
+default (that relied on the App's installation-wide webhook + repository
+picker, both gone now) — so this module is now opt-in, per repo:
 
-Flow:
-1. GitHub POSTs to our `@ext.webhook("events")` URL for every event type the
-   App subscribes to, with an `X-Hub-Signature-256` HMAC header computed over
-   the raw body using the shared `github_webhook_secret`.
-2. `webhook_events` verifies that signature (constant-time compare — timing
-   side-channels on the compare itself are exactly what HMAC verification is
-   supposed to close), rejecting anything that doesn't match with
-   GH_WEBHOOK_SIGNATURE_INVALID (matches the code already declared in
-   error_codes.py for the setup-callback's sibling check).
-3. Every event payload carries `installation.id` — the ONLY identity info
-   available to this otherwise-unauthenticated handler. `storage.
-   resolve_imperal_id_for_installation` looks that up against the reverse
-   index auth.py's `install_callback` writes on every successful install/
-   reinstall, to find which real Imperal user to notify.
-4. A small per-event-type table decides whether an event is notification-
-   worthy at all (e.g. a PR being *opened* is; a PR being merely *labeled* is
-   not, v1) and what message to send, then calls `ctx.notify(...)` — built
-   the same way `storage._store_for` builds a StoreClient for an arbitrary
-   user_id, because `ctx.notify` here is scoped to `__webhook__`, not the
-   real recipient (see `_notify_for`).
+- `enable_repo_notifications(repo)` registers a real GitHub webhook on that
+  one repo (events: issues, issue_comment, pull_request, workflow_run, push),
+  pointed at our shared `ctx.webhook_url("events")` endpoint with a shared
+  HMAC secret (`github_webhook_secret`), and records {repo_full_name,
+  github_hook_id} so it can be torn down later (storage.save_repo_webhook —
+  also writes the reverse index `repo_full_name -> imperal_id` the
+  unauthenticated receiver below needs).
+- `disable_repo_notifications(repo)` deletes that GitHub-side hook and the
+  local record/index entry.
+- `disconnect_github` (auth.py) sweeps every repo this user ever enabled
+  notifications on before deleting their token, so no orphaned GitHub-side
+  hooks are left pointing at a now-unauthorized integration.
 
-Non-goals (v1, matches extensions/github-connector.md §2): no per-user
-subscription preferences (which repos/event types to notify for) — every
-connected repo notifies for the fixed event set below. No webhook redelivery/
-backoff bookkeeping — GitHub itself retries failed deliveries, we don't need
-our own queue for that.
+The actual delivery receiver (`webhook_events`, `@ext.webhook("events")`)
+is otherwise unchanged in spirit from the GitHub App version: GitHub POSTs
+signed event deliveries, we verify `X-Hub-Signature-256` (constant-time
+compare), decide if the event is notification-worthy, and call
+`ctx.notify(...)` for the right real user(s). What changed is IDENTITY
+resolution: there is no more `installation.id` in any payload (that field
+only ever existed for GitHub Apps) — the only usable identity is
+`repository.full_name`, resolved via `storage.resolve_imperal_ids_for_repo`
+against the reverse index `enable_repo_notifications` wrote. A repo could in
+principle be watched by more than one connected Imperal user (e.g. two
+teammates each connected their own account to the same shared org repo), so
+this notifies ALL of them, not just one.
 """
 import hashlib
 import hmac
 import json
 
-from app import ext
+from imperal_sdk import ActionResult
+from pydantic import BaseModel, Field
+
+from app import ext, chat
+from error_codes import GH_NOT_CONNECTED, GH_WEBHOOK_REGISTRATION_FAILED
+from models import RepoNotificationResult
+import github_client
 import storage
+
+_WEBHOOK_EVENTS = ["issues", "issue_comment", "pull_request", "workflow_run", "push"]
+
+
+class _RepoParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo' — from list_repositories")
+
+
+async def _get_token(ctx):
+    token, err = await github_client.get_user_token(ctx)
+    if err:
+        return None, ActionResult.error(err, retryable=False, code=GH_NOT_CONNECTED)
+    return token, None
+
+
+@chat.function(
+    "enable_repo_notifications",
+    description=(
+        "Turn on live GitHub notifications for one repo — get notified in "
+        "Imperal (bell/telegram/email per your notification settings) when "
+        "an issue/PR opens, your review is requested, a PR merges, CI fails, "
+        "or someone pushes to the default branch. Registers a real webhook "
+        "on that repo (requires admin access to it on GitHub's side)."
+    ),
+    action_type="write",
+    data_model=RepoNotificationResult,
+    effects=["github.enable_notifications"],
+    event="github-connector-extension.enable_repo_notifications",
+)
+async def enable_repo_notifications(ctx, params: _RepoParams) -> ActionResult:
+    """POST /repos/{owner}/{repo}/hooks — registers a webhook pointed at our
+    shared `events` receiver, then records it so webhook_events can resolve
+    this repo back to this real user, and so disable_repo_notifications /
+    disconnect_github can find it again to delete it."""
+    token, err = await _get_token(ctx)
+    if err:
+        return err
+
+    existing = await storage.get_repo_webhook(ctx, params.repo)
+    if existing:
+        return ActionResult.success(
+            data=RepoNotificationResult(id=params.repo, title=params.repo, repo=params.repo, enabled=True),
+            summary=f"Notifications are already enabled for {params.repo}.",
+        )
+
+    secret = await ctx.secrets.get("github_webhook_secret")
+    if not secret:
+        return ActionResult.error(
+            "Webhook secret is not configured yet — the developer needs to finish setup first.",
+            code=GH_WEBHOOK_REGISTRATION_FAILED,
+        )
+
+    body = {
+        "name": "web",
+        "active": True,
+        "events": _WEBHOOK_EVENTS,
+        "config": {
+            "url": ctx.webhook_url("events"),
+            "content_type": "json",
+            "secret": secret,
+        },
+    }
+    resp = await github_client.gh_post(ctx, token, f"/repos/{params.repo}/hooks", json_body=body)
+    if resp.status_code >= 400:
+        return ActionResult.error(
+            github_client.gh_error_message(resp.status_code),
+            retryable=resp.status_code >= 500, code=GH_WEBHOOK_REGISTRATION_FAILED,
+        )
+
+    hook_id = resp.json().get("id")
+    await storage.save_repo_webhook(ctx, params.repo, hook_id)
+
+    return ActionResult.success(
+        data=RepoNotificationResult(id=params.repo, title=params.repo, repo=params.repo, enabled=True),
+        summary=f"Notifications enabled for {params.repo}. You'll hear about new issues/PRs, review requests, merges, and CI failures.",
+    )
+
+
+@chat.function(
+    "disable_repo_notifications",
+    description="Turn off live GitHub notifications for one repo and remove its webhook.",
+    action_type="write",
+    data_model=RepoNotificationResult,
+    effects=["github.disable_notifications"],
+    event="github-connector-extension.disable_repo_notifications",
+)
+async def disable_repo_notifications(ctx, params: _RepoParams) -> ActionResult:
+    """Deletes the GitHub-side hook (best-effort — if it's already gone on
+    GitHub's side, e.g. manually removed, we still clean up our own record)
+    then the local record + reverse index entry."""
+    token, err = await _get_token(ctx)
+    if err:
+        return err
+
+    record = await storage.get_repo_webhook(ctx, params.repo)
+    if not record:
+        return ActionResult.success(
+            data=RepoNotificationResult(id=params.repo, title=params.repo, repo=params.repo, enabled=False),
+            summary=f"Notifications were not enabled for {params.repo} — nothing to do.",
+        )
+
+    hook_id = record.get("github_hook_id")
+    if hook_id:
+        resp = await github_client.gh_delete(ctx, token, f"/repos/{params.repo}/hooks/{hook_id}")
+        if resp.status_code not in (204, 404):
+            await ctx.log(
+                f"disable_repo_notifications: GitHub hook delete returned {resp.status_code} for {params.repo} — cleaning up local record anyway",
+                level="warning",
+            )
+
+    await storage.delete_repo_webhook(ctx, params.repo)
+    return ActionResult.success(
+        data=RepoNotificationResult(id=params.repo, title=params.repo, repo=params.repo, enabled=False),
+        summary=f"Notifications disabled for {params.repo}.",
+    )
+
+
+async def disable_all_repo_notifications(ctx) -> None:
+    """Sweep every repo this user enabled notifications on, deleting the
+    GitHub-side hook for each. Called from auth.py's disconnect_github
+    BEFORE the token is deleted (needs a live token to call GitHub's delete-
+    hook endpoint) — otherwise disconnecting would leave orphaned hooks on
+    GitHub still pointing at a now-unauthorized integration."""
+    token, err = await github_client.get_user_token(ctx)
+    if err:
+        return  # no usable token left — nothing more we can do from our side
+    for record in await storage.list_repo_webhooks(ctx):
+        repo_full_name = record.get("repo_full_name", "")
+        hook_id = record.get("github_hook_id")
+        if repo_full_name and hook_id:
+            try:
+                await github_client.gh_delete(ctx, token, f"/repos/{repo_full_name}/hooks/{hook_id}")
+            except Exception as e:
+                await ctx.log(f"disable_all_repo_notifications: hook delete failed for {repo_full_name}: {e}", level="warning")
+        await storage.delete_repo_webhook(ctx, repo_full_name)
 
 
 def _notify_for(webhook_ctx, imperal_id: str):
@@ -118,8 +261,9 @@ def _describe_event(event_name: str, payload: dict) -> tuple[str, str] | None:
 
 @ext.webhook("events", method="POST", secret_header="X-Hub-Signature-256")
 async def webhook_events(ctx, headers: dict, body: str, query_params: dict) -> dict:
-    """Receives signed GitHub App event deliveries and turns notification-
-    worthy ones into ctx.notify calls for the right real user.
+    """Receives signed per-repo GitHub webhook deliveries and turns
+    notification-worthy ones into ctx.notify calls for every real user who
+    enabled notifications on that repo.
 
     Runs unauthenticated (ctx.user.imperal_id == "__webhook__") per
     @ext.webhook's contract — HMAC verification below is the only trust
@@ -142,15 +286,14 @@ async def webhook_events(ctx, headers: dict, body: str, query_params: dict) -> d
     except (json.JSONDecodeError, TypeError):
         return {"status": 400, "body": "Malformed JSON body."}
 
-    installation_id = str((payload.get("installation") or {}).get("id", ""))
-    if not installation_id:
-        # Some event types (e.g. GitHub App-level "installation" lifecycle
-        # events) don't carry a repo/installation we track notifications for.
+    repo_full_name = _repo_full_name(payload)
+    if not repo_full_name:
+        # Some event types don't carry a repo we track notifications for.
         return {"status": 200, "body": "ignored"}
 
-    imperal_id = await storage.resolve_imperal_id_for_installation(ctx, installation_id)
-    if not imperal_id:
-        await ctx.log(f"webhook_events: no known user for installation_id={installation_id} — ignoring", level="info")
+    imperal_ids = await storage.resolve_imperal_ids_for_repo(ctx, repo_full_name)
+    if not imperal_ids:
+        await ctx.log(f"webhook_events: no known watcher for repo={repo_full_name} — ignoring", level="info")
         return {"status": 200, "body": "ignored"}
 
     described = _describe_event(event_name, payload)
@@ -158,11 +301,11 @@ async def webhook_events(ctx, headers: dict, body: str, query_params: dict) -> d
         return {"status": 200, "body": "ignored"}
 
     message, priority = described
-    notify = _notify_for(ctx, imperal_id)
-    try:
-        await notify(message, priority=priority, channel="in_app")
-    except Exception as e:
-        await ctx.log(f"webhook_events: notify failed for {imperal_id}: {e}", level="error")
-        return {"status": 200, "body": "processed, notify failed"}
+    for imperal_id in imperal_ids:
+        notify = _notify_for(ctx, imperal_id)
+        try:
+            await notify(message, priority=priority, channel="in_app")
+        except Exception as e:
+            await ctx.log(f"webhook_events: notify failed for {imperal_id}: {e}", level="error")
 
     return {"status": 200, "body": "ok"}

@@ -1,5 +1,77 @@
 # Changelog
 
+## v0.7.0 — 2026-07-23 — Second pivot: GitHub App -> classic OAuth App
+
+### Changed (breaking, internal + user-facing)
+
+- **The whole "installation" concept is gone.** Replaced the GitHub App
+  (installation-scoped, repository-picker) model from v0.6.0 with a classic
+  OAuth App: one "Authorize this app?" screen, no repository selection —
+  the token can reach anything the connected account can reach.
+- `storage.py` rewritten: `gh_installations` -> `gh_connections` (just
+  `{account_login}`, no `installation_id`, no cached `repositories[]`).
+  New `gh_repo_webhooks` + `gh_repo_webhook_index` collections replace the
+  old installation-wide notification wiring (see below).
+- `user_auth.py` rewritten: classic OAuth code-exchange only. No refresh
+  cycle — classic OAuth App tokens don't expire by default, so there is
+  nothing to refresh (v0.6.0's ~8h access/~6mo refresh token rotation is
+  gone, it doesn't apply to this token type).
+- `auth.py` rewritten: `start_github_install`/`install_callback` ->
+  `connect_github`/`oauth_callback`. Scopes requested: `repo`, `read:org`,
+  `workflow`, `admin:repo_hook` (new — needed for per-repo webhook
+  registration, see below).
+- `handlers_repos.py`: `list_repositories` now reads `GET /user/repos`
+  directly (no more `/user/installations` + per-installation repo list
+  round trip) — simpler, and no longer silently limited to one
+  installation's repository_selection.
+- `panels.py`: sidebar now fetches the repo list live from `GET /user/repos`
+  on every render instead of reading a cached `repositories[]` field off
+  the old installation record — there's nothing left to cache that
+  correctly, since a classic OAuth token's reach isn't fixed at connect time.
+- **Live notifications are now opt-in, per repository**, not automatic for
+  every repo an installation covered. A classic OAuth App has no
+  App-level webhook the way a GitHub App does — each repo's hook must be
+  registered individually (`POST /repos/{owner}/{repo}/hooks`, needs
+  `admin:repo_hook`). New tools: `enable_repo_notifications(repo)`,
+  `disable_repo_notifications(repo)`. `disconnect_github` now sweeps every
+  repo-level webhook it ever registered before deleting the token, so
+  disconnecting never leaves an orphaned hook pointing at a dead
+  integration.
+- `handlers_webhook_events.py`: event identity resolution switched from
+  `installation.id` (a GitHub-App-only payload field, gone entirely from
+  a classic OAuth App's webhook deliveries) to `repository.full_name`,
+  resolved against the new per-repo reverse index.
+- Secrets: `github_app_slug` removed (no more App identity to display a
+  slug for). `github_client_id`/`github_client_secret` re-scoped to mean
+  the classic OAuth App's credentials, not the GitHub App's. Unchanged:
+  `github_webhook_secret`, `github_encryption_key`.
+
+### Why this release
+
+Creating a new repo and having it usable immediately, with zero manual
+"add this repo to the installation" step, was explicitly weighed against
+keeping the GitHub App's tighter per-repository scoping — and the friction
+of the installation picker was judged not worth it for this extension's
+actual usage pattern. This was a deliberate, discussed trade-off (broader
+account access, zero picker friction), not an oversight; see
+`extensions/github-connector.md` §12.2 for the full reasoning.
+
+### Tests
+67/67 tests passing (all install-flow/repo/webhook tests rewritten for the
+new connection model; +6 net new for per-repo notification toggles).
+`imperal validate .`: 0 errors, 0 warnings, 1 informational note (unchanged,
+no `@ext.on_install` hook).
+
+### Deploy blocker
+Not yet deployed. Requires registering a **new, separate classic OAuth App**
+on github.com (Settings → Developer settings → **OAuth Apps**, NOT GitHub
+Apps — a fresh registration, not a settings toggle on the old GitHub App),
+with Authorization callback URL = this extension's
+`ctx.webhook_url("oauth_callback")` value. Then save its Client ID/Client
+Secret as `github_client_id`/`github_client_secret`. The old GitHub App
+registration can be left alone or removed later — not urgent, not required
+for this to work.
+
 ## v0.6.0 — 2026-07-23 — Full migration to user-to-server OAuth
 
 ### Changed (breaking, internal)

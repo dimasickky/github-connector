@@ -1,41 +1,58 @@
-"""github-connector · install/connect flow.
+"""github-connector · connect flow (classic OAuth App).
 
-Follows the manual OAuth-like pattern already proven by spotify/app.py +
-handlers/auth.py (per extensions/github-connector.md §4), adapted for a
-GitHub App install with "Request user authorization (OAuth) during
-installation" enabled (§12.1, 2026-07-23 pivot to full user-to-server auth):
+Per extensions/github-connector.md §12.2 (2026-07-23, second pivot: GitHub
+App -> classic OAuth App): there is no more "install" step with a
+repository picker — GitHub's classic OAuth Apps only have one screen,
+"Authorize this app?", and once approved the token can reach everything on
+GitHub the user themselves can reach. This is deliberately simpler than the
+GitHub App flow it replaces (§12.1), traded for losing the per-repo scoping
+that flow had (see extensions/github-connector.md §12.2 for the full
+trade-off writeup — this was an explicit, discussed decision, not an
+oversight).
 
-1. `start_install` (authenticated chat.function) generates a one-shot state
+Flow:
+1. `connect_github` (authenticated chat.function) generates a one-shot state
    token, records it (storage.save_oauth_state — written under the shared
    "__webhook__" store partition so the webhook can find it later), and
-   returns the public GitHub install URL for the user to open.
-2. GitHub redirects back to our `setup_url` (`ctx.webhook_url("install_callback")`)
-   with `installation_id`, `code`, and our own `state` as query params.
-3. `install_callback` (unauthenticated @ext.webhook) validates `state`,
-   exchanges `code` for a real user-to-server access+refresh token pair
-   (user_auth.exchange_code_for_token), fetches the installation's
-   repository list using that token, and saves both the encrypted token
-   record and the installation metadata under the REAL user's store
-   partition (resolved from the state token, not from the request — the
-   request itself carries no trustworthy identity).
+   returns GitHub's `authorize` URL with our `client_id`, requested `scope`,
+   and `state`.
+2. GitHub redirects back to our registered callback URL
+   (`ctx.webhook_url("oauth_callback")`) with `code` and our own `state` as
+   query params — no `installation_id` exists in this model at all.
+3. `oauth_callback` (unauthenticated @ext.webhook) validates `state`,
+   exchanges `code` for an access token (user_auth.exchange_code_for_token),
+   reads the account login (`GET /user`), and saves both the encrypted
+   token record and a lightweight connection record under the REAL user's
+   store partition (resolved from the state token, not from the request —
+   the request itself carries no trustworthy identity).
 
-No GitHub webhook HMAC verification is needed on `install_callback` itself
+Scopes requested: `repo` (full repo read/write — classic OAuth has no
+finer-grained repo scope), `read:org` (list/read org repos the user can
+reach), `workflow` (required specifically to trigger/update GitHub Actions
+workflow files — GitHub rejects workflow-file writes without it even if
+`repo` is granted), `admin:repo_hook` (create/delete the per-repo webhooks
+this pivot now requires, see handlers_webhook_events.py).
+
+No GitHub webhook HMAC verification is needed on `oauth_callback` itself
 (it's a GET redirect from the browser, not a signed webhook event) — HMAC
-verification only applies to a future `webhook_events` handler receiving
-actual GitHub App webhook deliveries (issue/PR/push events), not built here.
+verification only applies to `handlers_webhook_events.py`'s per-repo webhook
+deliveries (issue/PR/push events), which is a separate handler.
 """
 import secrets as _secrets_mod
+import urllib.parse
 
 from imperal_sdk import ActionResult, ui
 from pydantic import BaseModel, Field
 
 from app import ext, chat
-from error_codes import GH_INSTALLATION_NOT_FOUND
+from error_codes import GH_NOT_CONNECTED
 from imperal_sdk.chat.error_codes import INTERNAL
 from models import DestructiveActionResult
 import github_client
 import storage
 import user_auth
+
+_OAUTH_SCOPES = "repo read:org workflow admin:repo_hook"
 
 
 class _NoParams(BaseModel):
@@ -46,63 +63,64 @@ class _ConfirmParams(BaseModel):
     confirm: bool = Field(default=False, description="Set true on a second call to actually disconnect. First call (default) only previews.")
 
 
-class StartInstallResult(BaseModel):
-    install_url: str = Field(description="Open this URL to install/authorize the GitHub App on your chosen repositories")
+class ConnectResult(BaseModel):
+    authorize_url: str = Field(description="Open this URL to authorize GitHub access")
 
 
-async def create_install_url(ctx) -> str:
-    """Create a one-shot state and return the matching GitHub App install URL.
-
-    Shared by the chat function and the sidebar. Panel buttons must receive a
-    concrete ``ui.Open(url)`` action at render time: a panel ``ui.Call`` only
-    displays the returned ActionResult summary as a toast and does not execute
-    UI actions nested in that result.
-    """
-    app_slug = await ctx.secrets.get("github_app_slug")
-    if not app_slug:
+async def create_authorize_url(ctx) -> str:
+    """Create a one-shot state and return the matching GitHub OAuth authorize
+    URL. Shared by the chat function and the sidebar. Panel buttons must
+    receive a concrete ``ui.Open(url)`` action at render time: a panel
+    ``ui.Call`` only displays the returned ActionResult summary as a toast
+    and does not execute UI actions nested in that result."""
+    client_id = await ctx.secrets.get("github_client_id")
+    if not client_id:
         return ""
 
     state = _secrets_mod.token_urlsafe(24)
     await storage.save_oauth_state(ctx, state, ctx.user.imperal_id)
-    return f"https://github.com/apps/{app_slug}/installations/new?state={state}"
+    callback_url = ctx.webhook_url("oauth_callback")
+    params = urllib.parse.urlencode({
+        "client_id": client_id,
+        "redirect_uri": callback_url,
+        "scope": _OAUTH_SCOPES,
+        "state": state,
+    })
+    return f"https://github.com/login/oauth/authorize?{params}"
 
 
 @chat.function(
-    "start_github_install",
+    "connect_github",
     description=(
-        "Get the link to connect GitHub — opens GitHub's own installation "
-        "page where you pick which repositories to grant access to. Use "
-        "this when the user wants to connect/link their GitHub account."
+        "Get the link to connect your GitHub account — opens GitHub's own "
+        "authorization page. Use this when the user wants to connect/link "
+        "their GitHub account."
     ),
     action_type="read",
-    data_model=StartInstallResult,
+    data_model=ConnectResult,
 )
-async def start_github_install(ctx, params: _NoParams) -> ActionResult:
-    """Generate a one-shot state token and return the GitHub App's public
-    install URL. Does not touch any GitHub API — this is a pure redirect
-    link, the actual installation happens on GitHub's own UI."""
-    install_url = await create_install_url(ctx)
-    if not install_url:
+async def connect_github(ctx, params: _NoParams) -> ActionResult:
+    """Generate a one-shot state token and return GitHub's authorize URL.
+    Does not touch any GitHub API — this is a pure redirect link, the actual
+    authorization happens on GitHub's own UI."""
+    authorize_url = await create_authorize_url(ctx)
+    if not authorize_url:
         return ActionResult.error(
-            "GitHub App is not configured yet (github_app_slug secret missing) — "
-            "the developer needs to finish registering the GitHub App first.",
+            "GitHub OAuth App is not configured yet (github_client_id secret "
+            "missing) — the developer needs to finish registering the OAuth "
+            "App first.",
             code=INTERNAL,
         )
 
     return ActionResult.success(
-        data={"install_url": install_url},
-        summary=(
-            f"Open this link to connect GitHub — choose which repositories "
-            f"to give access to, then come back here: {install_url}"
-        ),
+        data={"authorize_url": authorize_url},
+        summary=f"Open this link to connect GitHub, then come back here: {authorize_url}",
         ui=ui.Stack([
             ui.Button(
-                "Open GitHub install page",
-                icon="Github",
-                variant="primary",
-                on_click=ui.Open(install_url),
+                "Authorize GitHub", icon="Github", variant="primary",
+                on_click=ui.Open(authorize_url),
             ),
-            ui.Text("Pick which repositories to grant access to, then come back here."),
+            ui.Text("Approve access on GitHub's page, then come back here."),
         ]),
     )
 
@@ -110,11 +128,12 @@ async def start_github_install(ctx, params: _NoParams) -> ActionResult:
 @chat.function(
     "disconnect_github",
     description=(
-        "Disconnect your GitHub account — removes the stored installation "
-        "record. GitHub's own App installation is not touched (uninstall it "
-        "from github.com/settings/installations if you also want that gone); "
-        "this just makes Imperal forget about it. Requires an explicit "
-        "confirm=true on a second call — the first call only previews."
+        "Disconnect your GitHub account — removes the stored access token. "
+        "GitHub's own authorization record is not revoked automatically "
+        "(revoke it from github.com/settings/applications if you also want "
+        "that gone); this just makes Imperal forget about it. Requires an "
+        "explicit confirm=true on a second call — the first call only "
+        "previews."
     ),
     action_type="destructive",
     data_model=DestructiveActionResult,
@@ -123,18 +142,18 @@ async def start_github_install(ctx, params: _NoParams) -> ActionResult:
 )
 async def disconnect_github(ctx, params: _ConfirmParams) -> ActionResult:
     """Two-step confirm flow, same pattern as delete_branch/merge_pull_request."""
-    installation = await storage.get_installation(ctx)
-    if not installation:
+    connection = await storage.get_connection(ctx)
+    if not connection:
         return ActionResult.error(
             "No GitHub account connected — nothing to disconnect.",
-            retryable=False, code=GH_INSTALLATION_NOT_FOUND,
+            retryable=False, code=GH_NOT_CONNECTED,
         )
 
     if not params.confirm:
-        account = installation.get("account_login", "")
+        account = connection.get("account_login", "")
         return ActionResult.success(
             DestructiveActionResult(
-                id=account or "github", title=account or "GitHub", kind="github_installation",
+                id=account or "github", title=account or "GitHub", kind="github_connection",
                 action="disconnect", needs_confirmation=True,
             ),
             summary=(
@@ -144,7 +163,10 @@ async def disconnect_github(ctx, params: _ConfirmParams) -> ActionResult:
             ),
         )
 
-    await storage.delete_installation(ctx)
+    import handlers_webhook_events
+    await handlers_webhook_events.disable_all_repo_notifications(ctx)
+
+    await storage.delete_connection(ctx)
     await storage.delete_user_token(ctx)
     try:
         await ctx.extensions.emit("github-connector.install_disconnected", {
@@ -155,7 +177,7 @@ async def disconnect_github(ctx, params: _ConfirmParams) -> ActionResult:
 
     return ActionResult.success(
         DestructiveActionResult(
-            id="github", title="GitHub", kind="github_installation",
+            id="github", title="GitHub", kind="github_connection",
             action="disconnect", needs_confirmation=False,
         ),
         summary="GitHub disconnected. You can reconnect any time from the sidebar.",
@@ -163,91 +185,77 @@ async def disconnect_github(ctx, params: _ConfirmParams) -> ActionResult:
     )
 
 
-@ext.webhook("install_callback", method="GET")
-async def install_callback(ctx, headers: dict, body: str, query_params: dict) -> dict:
-    """GitHub redirects here after the user finishes the install-page flow,
-    with `installation_id` and our own `state` as query params. Runs as an
-    UNAUTHENTICATED webhook (ctx.user.imperal_id == "__webhook__") — the only
-    thing that lets us attribute this to a real user is the `state` token
-    matching one we wrote in `start_github_install` under the shared
+@ext.webhook("oauth_callback", method="GET")
+async def oauth_callback(ctx, headers: dict, body: str, query_params: dict) -> dict:
+    """GitHub redirects here after the user approves (or denies) the
+    authorize screen, with `code` and our own `state` as query params. Runs
+    as an UNAUTHENTICATED webhook (ctx.user.imperal_id == "__webhook__") —
+    the only thing that lets us attribute this to a real user is the
+    `state` token matching one we wrote in `connect_github` under the shared
     "__webhook__" store partition (storage.find_and_consume_oauth_state).
 
     Returns a plain dict (not ActionResult) per @ext.webhook's contract —
     this is an HTTP-level handler, not a chat tool call.
     """
     state = query_params.get("state", "")
-    installation_id = query_params.get("installation_id", "")
     code = query_params.get("code", "")
+    oauth_error = query_params.get("error", "")
 
-    if not state or not installation_id or not code:
-        # `code` only shows up once "Request user authorization (OAuth) during
-        # installation" is turned on in the App's own settings (§12.1) — a
-        # missing code here almost always means that flag isn't on yet,
-        # not a client bug, so say so plainly rather than a generic 400.
-        missing = "code" if (state and installation_id) else "state or installation_id"
-        return {"status": 400, "body": f"Missing {missing}. If this is a fresh install, make sure "
-                                        "'Request user authorization (OAuth) during installation' is "
-                                        "enabled in the GitHub App's settings."}
+    if oauth_error:
+        # The user clicked "Cancel" on GitHub's authorize screen, or GitHub
+        # itself rejected the request — either way this is not a bug on our
+        # side, so say so plainly rather than a generic 400.
+        return {"status": 200, "body": f"GitHub authorization was not completed ({oauth_error}). You can retry connecting GitHub from chat any time."}
+
+    if not state or not code:
+        return {"status": 400, "body": "Missing state or code. Please retry connecting GitHub from chat."}
 
     imperal_id = await storage.find_and_consume_oauth_state(ctx, state)
     if not imperal_id:
         # Either forged/replayed state, or it expired — either way, do NOT
         # guess a user. Audit-log this as a rejected attempt, same principle
         # as wp-site-connector's manage_plugin/run_wp_cli reject logging.
-        await ctx.log(f"install_callback: rejected — unknown/expired state (installation_id={installation_id})", level="warning")
-        return {"status": 400, "body": "Invalid or expired install session. Please retry connecting GitHub from chat."}
+        await ctx.log("oauth_callback: rejected — unknown/expired state", level="warning")
+        return {"status": 400, "body": "Invalid or expired connect session. Please retry connecting GitHub from chat."}
 
-    # Exchange the one-time code for a real user-to-server token (§12.1) —
-    # this IS the credential every tool call authenticates with from here on.
     token_payload, err = await user_auth.exchange_code_for_token(ctx, code)
     if err:
-        await ctx.log(f"install_callback: code exchange failed for installation_id={installation_id}: {err}", level="error")
+        await ctx.log(f"oauth_callback: code exchange failed: {err}", level="error")
         return {"status": 502, "body": f"Could not complete GitHub authorization: {err}"}
 
     access_token = token_payload["access_token"]
 
-    resp = await github_client.gh_get(ctx, access_token, f"/user/installations/{installation_id}/repositories", {"per_page": 100})
+    resp = await github_client.gh_get(ctx, access_token, "/user")
     if resp.status_code >= 400:
-        await ctx.log(f"install_callback: repository list fetch failed ({resp.status_code}) for installation_id={installation_id}", level="error")
-        return {"status": 502, "body": "Connected, but could not read the repository list from GitHub."}
+        await ctx.log(f"oauth_callback: /user lookup failed ({resp.status_code})", level="error")
+        return {"status": 502, "body": "Connected, but could not read your GitHub account info."}
 
-    data = resp.json()
-    repos = data.get("repositories", []) if isinstance(data, dict) else []
-    repo_names = [r.get("full_name", "") for r in repos]
-    account_login = repos[0]["owner"]["login"] if repos else ""
+    account_login = resp.json().get("login", "")
 
     encrypted_record = await user_auth.encrypt_token_record(ctx, token_payload)
     await storage.save_user_token_for_user(ctx, imperal_id, encrypted_record)
-    await storage.save_installation_for_user(ctx, imperal_id, {
-        "installation_id": installation_id,
-        "account_login": account_login,
-        "repositories": repo_names,
-    })
+    await storage.save_connection_for_user(ctx, imperal_id, {"account_login": account_login})
 
     # @ext.webhook has no event= param (that's chat.function-only) — the
     # sidebar panel's refresh="on_event:..." needs an explicit emit so it
-    # actually re-fetches once the install finishes. ctx.extensions.emit is
+    # actually re-fetches once the connect finishes. ctx.extensions.emit is
     # the ExtensionsProtocol method for exactly this (context.py:106).
     #
     # This handler runs under the webhook's own pseudo-identity
     # (ctx.user.imperal_id == "__webhook__"), so ctx.extensions.emit would
     # publish the event as "__webhook__" — a session the real user's panel
     # is never subscribed to, meaning the sidebar's refresh="on_event:..."
-    # never actually fires for them (the confirmed root cause of the
-    # "sidebar doesn't auto-refresh after reconnect" report). Emit through
-    # an ExtensionsClient rescoped to the real imperal_id instead, same
-    # rescoping trick storage.py already uses for the store.
+    # never actually fires for them. Emit through an ExtensionsClient
+    # rescoped to the real imperal_id instead, same rescoping trick
+    # storage.py already uses for the store.
     try:
         await storage._extensions_for(ctx, imperal_id).emit("github-connector.install_connected", {
             "imperal_id": imperal_id, "account_login": account_login,
         })
     except Exception as e:
-        await ctx.log(f"install_callback: emit failed (non-fatal): {e}", level="warning")
+        await ctx.log(f"oauth_callback: emit failed (non-fatal): {e}", level="warning")
 
     return {
         "status": 200,
-        "body": (
-            f"GitHub connected — {len(repo_names)} repositories linked "
-            f"({account_login}). You can close this tab and go back to chat."
-        ),
+        "body": f"GitHub connected as {account_login}. You can close this tab and go back to chat.",
     }

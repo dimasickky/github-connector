@@ -270,3 +270,10 @@ class TriggerWorkflowParams(BaseModel):
 class WorkflowDispatchResult(sdl.Entity):
     workflow: str = ""
     ref: str = ""
+
+
+# ── Per-repo webhook notification toggle (§12.2) ────────────────────────── #
+
+class RepoNotificationResult(sdl.Entity):
+    repo: str = ""
+    enabled: bool = False

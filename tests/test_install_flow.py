@@ -1,9 +1,11 @@
-"""End-to-end (mocked) test of the install flow: start_github_install ->
-storage state round-trip -> install_callback -> storage.get_installation.
+"""End-to-end (mocked) test of the connect flow: connect_github ->
+storage state round-trip -> oauth_callback -> storage.get_connection.
 
-Uses conftest's seeded RSA key so JWT signing in github_client actually
-runs (not mocked away), matching the "seed real crypto, don't mock it"
-approach already used in wp-site-connector's test suite.
+Per extensions/github-connector.md §12.2 (2026-07-23 second pivot: GitHub
+App -> classic OAuth App) — there is no more installation_id/repository
+picker in this flow at all; connect_github just returns GitHub's classic
+`authorize` URL and oauth_callback resolves a plain {account_login}
+connection record plus the OAuth token.
 """
 import pytest
 
@@ -12,20 +14,20 @@ from imperal_sdk.testing import MockContext
 import auth
 import panels
 import storage
-from tests.conftest import TEST_APP_SLUG
+from tests.conftest import TEST_CLIENT_ID, seed_user_token
 
 
 @pytest.mark.asyncio
-async def test_start_github_install_returns_link_with_state():
+async def test_connect_github_returns_link_with_state():
     ctx = MockContext(user_id="user-1")
-    result = await auth.start_github_install(ctx, auth._NoParams())
+    result = await auth.connect_github(ctx, auth._NoParams())
     assert result.status == "success"
-    assert TEST_APP_SLUG in result.data["install_url"]
-    assert "state=" in result.data["install_url"]
+    assert TEST_CLIENT_ID in result.data["authorize_url"]
+    assert "state=" in result.data["authorize_url"]
 
     # the state token must be retrievable (one-shot) for the same user
-    url = result.data["install_url"]
-    state = url.split("state=")[1]
+    url = result.data["authorize_url"]
+    state = url.split("state=")[1].split("&")[0]
     resolved = await storage.find_and_consume_oauth_state(ctx, state)
     assert resolved == "user-1"
     # one-shot: second lookup must fail
@@ -42,42 +44,53 @@ async def test_sidebar_connect_button_opens_github_directly():
     button = payload["props"]["children"][1]
     action = button["props"]["on_click"]
     assert action["action"] == "open"
-    assert TEST_APP_SLUG in action["url"]
+    assert TEST_CLIENT_ID in action["url"]
     assert "state=" in action["url"]
 
 
 @pytest.mark.asyncio
-async def test_start_github_install_missing_slug_secret_errors():
+async def test_connect_github_missing_client_id_errors():
     ctx = MockContext(user_id="user-1")
-    ctx.secrets._store.pop("github_app_slug", None)
-    result = await auth.start_github_install(ctx, auth._NoParams())
+    ctx.secrets._store.pop("github_client_id", None)
+    result = await auth.connect_github(ctx, auth._NoParams())
     assert result.status == "error"
 
 
 @pytest.mark.asyncio
-async def test_install_callback_rejects_missing_params():
+async def test_oauth_callback_rejects_missing_params():
     ctx = MockContext(user_id="__webhook__")
-    resp = await auth.install_callback(ctx, headers={}, body="", query_params={})
+    resp = await auth.oauth_callback(ctx, headers={}, body="", query_params={})
     assert resp["status"] == 400
 
 
 @pytest.mark.asyncio
-async def test_install_callback_rejects_unknown_state():
+async def test_oauth_callback_rejects_unknown_state():
     ctx = MockContext(user_id="__webhook__")
-    resp = await auth.install_callback(
+    resp = await auth.oauth_callback(
         ctx, headers={}, body="",
-        query_params={"state": "forged-state", "installation_id": "999", "code": "some-code"},
+        query_params={"state": "forged-state", "code": "some-code"},
     )
     assert resp["status"] == 400
     assert "Invalid or expired" in resp["body"]
 
 
 @pytest.mark.asyncio
-async def test_full_install_round_trip_saves_installation_and_emits_event():
-    # Step 1: user starts install from their own authenticated ctx.
+async def test_oauth_callback_reports_user_cancelled_authorization():
+    ctx = MockContext(user_id="__webhook__")
+    resp = await auth.oauth_callback(
+        ctx, headers={}, body="",
+        query_params={"error": "access_denied"},
+    )
+    assert resp["status"] == 200
+    assert "not completed" in resp["body"]
+
+
+@pytest.mark.asyncio
+async def test_full_connect_round_trip_saves_connection_and_emits_event():
+    # Step 1: user starts the connect flow from their own authenticated ctx.
     user_ctx = MockContext(user_id="user-42")
-    start_result = await auth.start_github_install(user_ctx, auth._NoParams())
-    state = start_result.data["install_url"].split("state=")[1]
+    start_result = await auth.connect_github(user_ctx, auth._NoParams())
+    state = start_result.data["authorize_url"].split("state=")[1].split("&")[0]
 
     # Step 2: GitHub calls back on an unauthenticated webhook ctx, sharing
     # the SAME underlying MockStore/MockHTTP/MockSecretStore instances (as
@@ -89,28 +102,20 @@ async def test_full_install_round_trip_saves_installation_and_emits_event():
 
     webhook_ctx.http.mock_post(
         "login/oauth/access_token",
-        {"access_token": "ghu_faketoken", "refresh_token": "ghr_fakerefresh",
-         "expires_in": 28800, "refresh_token_expires_in": 15811200},
+        {"access_token": "gho_faketoken", "scope": "repo,read:org,workflow,admin:repo_hook", "token_type": "bearer"},
     )
-    webhook_ctx.http.mock_get(
-        "/user/installations/555/repositories",
-        {"repositories": [
-            {"full_name": "dimasickky/repo-one", "owner": {"login": "dimasickky"}},
-            {"full_name": "dimasickky/repo-two", "owner": {"login": "dimasickky"}},
-        ]},
-    )
+    webhook_ctx.http.mock_get("/user", {"login": "dimasickky"})
 
-    resp = await auth.install_callback(
+    resp = await auth.oauth_callback(
         webhook_ctx, headers={}, body="",
-        query_params={"state": state, "installation_id": "555", "code": "fake-code"},
+        query_params={"state": state, "code": "fake-code"},
     )
     assert resp["status"] == 200
-    assert "2 repositories" in resp["body"]
+    assert "dimasickky" in resp["body"]
 
-    installation = await storage.get_installation(user_ctx)
-    assert installation is not None
-    assert installation["account_login"] == "dimasickky"
-    assert installation["repositories"] == ["dimasickky/repo-one", "dimasickky/repo-two"]
+    connection = await storage.get_connection(user_ctx)
+    assert connection is not None
+    assert connection["account_login"] == "dimasickky"
 
     token_record = await storage.get_user_token(user_ctx)
     assert token_record is not None
@@ -130,16 +135,16 @@ class _FakeProdExtensionsClient:
 
 
 @pytest.mark.asyncio
-async def test_install_callback_emits_event_scoped_to_real_user_not_webhook(monkeypatch):
+async def test_oauth_callback_emits_event_scoped_to_real_user_not_webhook(monkeypatch):
     """Regression test for the sidebar-doesn't-auto-refresh bug: the emit must
     go out through a client rescoped to the REAL imperal_id, resolved from the
-    same oauth-state lookup install_callback already does — not the webhook's
+    same oauth-state lookup oauth_callback already does — not the webhook's
     own "__webhook__" pseudo-identity, which the real user's panel session
     never sees.
     """
     user_ctx = MockContext(user_id="user-77")
-    start_result = await auth.start_github_install(user_ctx, auth._NoParams())
-    state = start_result.data["install_url"].split("state=")[1]
+    start_result = await auth.connect_github(user_ctx, auth._NoParams())
+    state = start_result.data["authorize_url"].split("state=")[1].split("&")[0]
 
     webhook_ctx = MockContext(user_id="__webhook__")
     webhook_ctx.store = user_ctx.store
@@ -147,12 +152,9 @@ async def test_install_callback_emits_event_scoped_to_real_user_not_webhook(monk
     webhook_ctx.http = user_ctx.http
 
     webhook_ctx.http.mock_post("login/oauth/access_token", {
-        "access_token": "ghu_faketoken", "refresh_token": "ghr_fakerefresh",
-        "expires_in": 28800, "refresh_token_expires_in": 15811200,
+        "access_token": "gho_faketoken", "scope": "repo", "token_type": "bearer",
     })
-    webhook_ctx.http.mock_get("/user/installations/777/repositories", {"repositories": [
-        {"full_name": "dimasickky/repo-x", "owner": {"login": "dimasickky"}},
-    ]})
+    webhook_ctx.http.mock_get("/user", {"login": "dimasickky"})
 
     seen_user_ids = []
     fake_client = _FakeProdExtensionsClient()
@@ -163,9 +165,9 @@ async def test_install_callback_emits_event_scoped_to_real_user_not_webhook(monk
 
     monkeypatch.setattr(storage, "_extensions_for", _fake_extensions_for)
 
-    resp = await auth.install_callback(
+    resp = await auth.oauth_callback(
         webhook_ctx, headers={}, body="",
-        query_params={"state": state, "installation_id": "777", "code": "fake-code"},
+        query_params={"state": state, "code": "fake-code"},
     )
     assert resp["status"] == 200
     assert seen_user_ids == ["user-77"]  # real user, never "__webhook__"
@@ -175,7 +177,7 @@ async def test_install_callback_emits_event_scoped_to_real_user_not_webhook(monk
 
 
 @pytest.mark.asyncio
-async def test_disconnect_github_no_installation_errors():
+async def test_disconnect_github_no_connection_errors():
     ctx = MockContext(user_id="user-1")
     result = await auth.disconnect_github(ctx, auth._ConfirmParams(confirm=True))
     assert result.status == "error"
@@ -184,27 +186,23 @@ async def test_disconnect_github_no_installation_errors():
 @pytest.mark.asyncio
 async def test_disconnect_github_preview_does_not_delete():
     ctx = MockContext(user_id="user-1")
-    await storage.save_installation(ctx, {
-        "installation_id": "1", "account_login": "octocat", "repositories": ["octocat/hello"],
-    })
+    await storage.save_connection(ctx, {"account_login": "octocat"})
     result = await auth.disconnect_github(ctx, auth._ConfirmParams(confirm=False))
     assert result.status == "success"
     assert result.data.needs_confirmation is True
     # not actually deleted yet
-    assert await storage.get_installation(ctx) is not None
+    assert await storage.get_connection(ctx) is not None
 
 
 @pytest.mark.asyncio
 async def test_disconnect_github_confirmed_deletes_and_refreshes_sidebar():
     ctx = MockContext(user_id="user-1")
-    await storage.save_installation(ctx, {
-        "installation_id": "1", "account_login": "octocat", "repositories": ["octocat/hello"],
-    })
+    await storage.save_connection(ctx, {"account_login": "octocat"})
     result = await auth.disconnect_github(ctx, auth._ConfirmParams(confirm=True))
     assert result.status == "success"
     assert result.data.needs_confirmation is False
     assert result.refresh_panels == ["sidebar"]
-    assert await storage.get_installation(ctx) is None
+    assert await storage.get_connection(ctx) is None
 
     # sidebar must fall back to the "not connected" state afterwards
     tree = await panels.sidebar(ctx)
@@ -213,22 +211,15 @@ async def test_disconnect_github_confirmed_deletes_and_refreshes_sidebar():
 
 
 @pytest.mark.asyncio
-async def test_sidebar_connected_shows_switch_and_disconnect_buttons():
+async def test_sidebar_connected_shows_disconnect_button():
     ctx = MockContext(user_id="user-1")
-    await storage.save_installation(ctx, {
-        "installation_id": "1", "account_login": "octocat", "repositories": ["octocat/hello"],
-    })
+    await storage.save_connection(ctx, {"account_login": "octocat"})
+    await seed_user_token(ctx)
+    ctx.http.mock_get("/user/repos", [])
     tree = await panels.sidebar(ctx)
     payload = tree.to_dict()
     footer = payload["props"]["children"][-1]
-    labels = [b["props"]["label"] for b in footer["props"]["children"]]
-    assert "Switch account" in labels
-    assert "Disconnect" in labels
-
-    switch_btn = next(b for b in footer["props"]["children"] if b["props"]["label"] == "Switch account")
-    assert switch_btn["props"]["on_click"]["action"] == "open"
-
-    disconnect_btn = next(b for b in footer["props"]["children"] if b["props"]["label"] == "Disconnect")
-    assert disconnect_btn["props"]["on_click"]["action"] == "call"
-    assert disconnect_btn["props"]["on_click"]["function"] == "disconnect_github"
-    assert disconnect_btn["props"]["on_click"]["params"]["confirm"] is True
+    assert footer["props"]["label"] == "Disconnect"
+    assert footer["props"]["on_click"]["action"] == "call"
+    assert footer["props"]["on_click"]["function"] == "disconnect_github"
+    assert footer["props"]["on_click"]["params"]["confirm"] is True
