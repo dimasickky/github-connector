@@ -2,7 +2,7 @@ from imperal_sdk import Extension, ChatExtension
 
 ext = Extension(
     "github-connector-extension",
-    version="0.7.0",
+    version="0.8.0",
     capabilities=["vcs:read", "vcs:write", "vcs:merge", "vcs:admin", "ci:trigger", "auth:oauth"],
     display_name="GitHub Connector",
     description=(

@@ -1,5 +1,40 @@
 # Changelog
 
+## v0.8.0 — 2026-07-27 — Ambient repo context (first skeleton section)
+
+### Added
+
+- **`repos_overview` skeleton section.** This extension shipped no skeleton at
+  all, so the assistant had zero ambient signal about GitHub: even "what am I
+  working on?" required an explicit call, and every other connector of ours
+  already surfaces its state. The section carries `connected`, `login`,
+  `repo_count`, `watched_repos` (repos with live webhooks — a local store read)
+  and a six-repo sample of the most recently updated, each with visibility,
+  language, stars and default branch.
+- **`skeleton_alert_repos_overview`** — fires only on the connect/disconnect
+  transition. A star count ticking up or a repo shifting position in the
+  "recently updated" sample is not news; losing the connection is, because it
+  silently breaks every GitHub tool until the user acts.
+- Twelve tests covering the layered degradation (not connected → token gone →
+  GitHub erroring → malformed rows, each still returning a usable payload) and
+  the projection contract the payload shape depends on.
+
+### Notes
+
+- The section makes one bounded `GET /user/repos`, wrapped in `asyncio.wait_for`
+  (8s) with a broad `except`, mirroring how the platform's own mail skeleton
+  calls its providers. The store only holds the connection record and webhook
+  rows — not repos — so without that call there is nothing to show. Nothing
+  from it may propagate: a refresh that raises drops the whole section.
+- `ttl=120s`, deliberately slower than our busier sections: this list moves on
+  GitHub's side rather than as a result of our own writes, and it is the only
+  section here that costs a network call.
+- Two bugs in this section were found *after* the tests were green, by feeding a
+  realistic payload through the platform's actual renderer: `repo_count`
+  reported the sample size (6) instead of the true total, and six long names all
+  truncated to the same string, reading as duplicate rows. Both are fixed and
+  both now have regression tests.
+
 ## v0.7.0 — 2026-07-23 — Second pivot: GitHub App -> classic OAuth App
 
 ### Changed (breaking, internal + user-facing)

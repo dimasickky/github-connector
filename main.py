@@ -14,7 +14,7 @@ if _EXT_DIR not in sys.path:
 _LOCAL = ("app", "auth", "storage", "github_client", "error_codes", "models",
           "panels", "panels_browser", "handlers_repos", "handlers_pulls",
           "handlers_issues", "handlers_actions", "handlers_content",
-          "handlers_webhook_events")
+          "handlers_webhook_events", "skeleton")
 for _mod in _LOCAL:
     sys.modules.pop(_mod, None)
 
@@ -28,3 +28,4 @@ import handlers_content  # noqa: E402,F401
 import handlers_webhook_events  # noqa: E402,F401
 import panels  # noqa: E402,F401
 import panels_browser  # noqa: E402,F401
+import skeleton  # noqa: E402,F401

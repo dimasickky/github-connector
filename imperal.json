@@ -1,8 +1,8 @@
 {
   "manifest_schema_version": 3,
-  "sdk_version": "5.9.11",
+  "sdk_version": "5.9.12",
   "app_id": "github-connector-extension",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "name": "GitHub Connector",
   "description": "Browse your GitHub repositories, view code and commit history, and manage pull requests and issues directly from chat.",
   "icon": "icon.svg",
@@ -17,6 +17,27 @@
     "auth:oauth"
   ],
   "tools": [
+    {
+      "name": "skeleton_refresh_repos_overview",
+      "description": "Connected GitHub account — login, and the most recently updated repositories (name, private flag, language, stars, default branch) plus how many repos have live notifications enabled. Ambient context so the assistant knows what the user is working on without an explicit lookup.",
+      "scopes": [],
+      "parameters": {}
+    },
+    {
+      "name": "skeleton_alert_repos_overview",
+      "description": "Alert on GitHub connected or disconnected.",
+      "scopes": [],
+      "parameters": {
+        "old": {
+          "type": "string",
+          "required": false
+        },
+        "new": {
+          "type": "string",
+          "required": false
+        }
+      }
+    },
     {
       "name": "connect_github",
       "description": "Get the link to connect your GitHub account — opens GitHub's own authorization page. Use this when the user wants to connect/link their GitHub account.",
