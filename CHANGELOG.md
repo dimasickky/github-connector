@@ -1,5 +1,41 @@
 # Changelog
 
+## v0.9.2 — 2026-07-27 — Connect-flow state tokens actually expire now
+
+### Fixed
+
+- **OAuth state tokens never expired, and abandoned ones were never cleaned
+  up.** The docstring said "unknown/expired", but nothing ever checked a
+  timestamp: a row was deleted only on a *successful* callback. Every
+  abandoned connect attempt — closed tab, "Cancel" on GitHub's authorize
+  screen, lost connectivity — left a row behind permanently, in a partition
+  shared by every user. Two distinct problems in one: the collection grew
+  without bound, and a one-shot auth handoff token stayed valid indefinitely,
+  which is not how such a token should behave.
+- State tokens now carry `created_ts` and expire after 15 minutes
+  (`_STATE_TTL_SECONDS`), matching telegram-publisher's link-code TTL — the
+  same kind of short-lived handoff. Expiry is enforced in one place, on read.
+- An expired state is **consumed** as well as rejected, so retrying with it
+  fails too. A token that survives its own expiry to be replayed would be
+  worse than having no expiry at all.
+- `_sweep_expired_states` clears expired leftovers, hung off
+  `save_oauth_state`: each new connect attempt pays a small bounded cost to
+  remove junk from earlier abandoned ones. Extensions have no cron here, so
+  the sweep rides along on a neighbouring operation — the same approach
+  telegram-publisher uses.
+
+### Notes
+
+- **The sweep is deliberately not narrowed with `where=`.** Its entire purpose
+  is to drop *other* users' stale rows from the shared partition; scoping it to
+  the current user would look tidier and let the collection grow forever —
+  precisely the bug being fixed. A test pins this.
+- **Rows written before this version have no `created_ts` and are left
+  alone** — accepted on read, skipped by the sweep. Treating a missing
+  timestamp as "ancient" would kill sign-ins that are in flight at deploy time.
+  Also pinned by a test.
+- 7 new tests (104 total).
+
 ## v0.9.1 — 2026-07-27 — Store reads: point lookups instead of scans
 
 ### Fixed

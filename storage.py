@@ -7,14 +7,15 @@ select. The user just authorizes once and the token can see everything they
 themselves can see on GitHub. So the per-user data model collapses to two
 much simpler things:
 
-- `gh_oauth_states`  — unchanged in shape/purpose from the GitHub App design:
-  short-lived (~900s), one-shot install-flow state token. Written from an
-  AUTHENTICATED chat.function call right before redirecting to GitHub's
-  `authorize` page. Read back inside the unauthenticated webhook handler
-  (ctx.user.imperal_id == "__webhook__" there per Extension.webhook's
-  docstring) by scanning the pseudo-user's own state records for a matching
-  `state` value — the state token itself IS the only thing the webhook can
-  trust, precisely because it arrives unauthenticated.
+- `gh_oauth_states`  — short-lived (15 min, `_STATE_TTL_SECONDS`), one-shot
+  connect-flow state token. Written from an AUTHENTICATED chat.function call
+  right before redirecting to GitHub's `authorize` page. Read back inside the
+  unauthenticated webhook handler (ctx.user.imperal_id == "__webhook__" there
+  per Extension.webhook's docstring) via a `where={"state": ...}` lookup — the
+  state token itself IS the only thing the webhook can trust, precisely
+  because it arrives unauthenticated. Expiry is enforced on read, and
+  abandoned rows are swept when the next connect attempt is created; before
+  that, nothing expired and nothing was ever cleaned up.
 - `gh_connections` — the real per-user connection record once the callback
   resolves the state back to a real imperal_id: {account_login}. No
   installation_id, no repositories[] list — a classic OAuth token just IS
@@ -57,6 +58,23 @@ REPO_WEBHOOK_INDEX_COLLECTION = "gh_repo_webhook_index"
 # named ceiling plus a truncation signal for callers that need completeness —
 # never a bare number buried in a call site that reads like "all of them".
 _WEBHOOK_PAGE_LIMIT = 200
+
+# How long an unfinished connect attempt stays usable. A state token is only
+# needed for the few seconds between "redirect to GitHub" and "GitHub redirects
+# back", so 15 minutes is already generous — it matches telegram-publisher's
+# link-code TTL, which is the same kind of one-shot handoff token.
+#
+# Until now these records had NO expiry at all: the docstring said
+# "unknown/expired", but nothing ever checked, and a row was deleted only on a
+# SUCCESSFUL callback. Every abandoned attempt — user closes the GitHub tab,
+# clicks Cancel, loses connectivity — left a row behind forever, in a partition
+# shared by all users. Two consequences: the collection grew without bound, and
+# a state token stayed valid indefinitely, which is not how a one-shot auth
+# handoff should behave.
+_STATE_TTL_SECONDS = 15 * 60
+
+# Ceiling for the expiry sweep over the shared partition (see _sweep_expired_states).
+_STATE_SWEEP_LIMIT = 200
 
 
 def _store_for(ctx, user_id: str):
@@ -140,20 +158,66 @@ async def save_oauth_state(ctx, state: str, imperal_id: str) -> None:
     identity of its own to match against; `imperal_id` in the record body is
     what lets the callback attribute the finished connection to the right
     real user.
+
+    Also records `created_ts` (epoch seconds) — that is what the TTL check in
+    find_and_consume_oauth_state reads — and sweeps expired leftovers first, so
+    abandoned attempts cannot pile up forever.
     """
+    import time as _time
     store = _store_for(ctx, "__webhook__")
-    await store.create(OAUTH_STATES_COLLECTION, {"state": state, "imperal_id": imperal_id})
+    await _sweep_expired_states(store)
+    await store.create(OAUTH_STATES_COLLECTION, {
+        "state": state, "imperal_id": imperal_id, "created_ts": _time.time(),
+    })
 
 
-async def find_and_consume_oauth_state(webhook_ctx, state: str) -> str | None:
+async def _sweep_expired_states(store, ttl_seconds: int = _STATE_TTL_SECONDS) -> int:
+    """Delete expired state rows from the shared partition. Returns how many.
+
+    Hung off save_oauth_state — i.e. every new connect attempt pays a small,
+    bounded cost to clear out the junk left by earlier abandoned ones. This
+    mirrors telegram-publisher, where the expiry sweep likewise rides along on a
+    neighbouring operation, because an extension has no cron of its own here.
+
+    Deliberately NOT narrowed with `where=`: the whole point is to see and drop
+    OTHER users' stale rows too. Narrowing it to the current user would look
+    tidier and let the shared collection grow forever — exactly the bug this
+    exists to fix.
+
+    Rows written before this version have no `created_ts`. They are left alone
+    rather than assumed ancient: deleting a row that might belong to a connect
+    attempt currently in flight would break a live sign-in, and the pre-existing
+    ones age out of relevance on their own once no code path can create them.
+    """
+    import time as _time
+    page = await store.query(OAUTH_STATES_COLLECTION, limit=_STATE_SWEEP_LIMIT)
+    now = _time.time()
+    removed = 0
+    for doc in page.data:
+        created_ts = doc.data.get("created_ts")
+        if created_ts and (now - created_ts) > ttl_seconds:
+            await store.delete(OAUTH_STATES_COLLECTION, doc.id)
+            removed += 1
+    return removed
+
+
+async def find_and_consume_oauth_state(webhook_ctx, state: str,
+                                       ttl_seconds: int = _STATE_TTL_SECONDS) -> str | None:
     """Called from the unauthenticated webhook (its own ctx.store is already
     scoped to "__webhook__", matching what save_oauth_state wrote into).
-    Scans for a matching `state` value — that's the only lookup key available
-    to an unauthenticated caller — and returns the `imperal_id` recorded
-    alongside it.
+    Looks up a matching `state` value — that's the only key available to an
+    unauthenticated caller — and returns the `imperal_id` recorded alongside
+    it.
 
     Returns the imperal_id that owns this state, or None if unknown/expired/
-    already consumed. One-shot: deletes on successful read.
+    already consumed. One-shot: deletes on match — valid OR expired, because an
+    expired state must not become usable on a second attempt either.
+
+    TTL is enforced HERE rather than left to the caller, so there is exactly one
+    place it can go wrong — the same shape telegram-publisher uses for its link
+    codes. Rows written before TTL existed have no `created_ts`; those are
+    accepted as before rather than rejected, so an upgrade cannot invalidate a
+    sign-in that is already in flight.
 
     Looked up with `where={"state": ...}`, NOT by paging through the
     collection. This is a point lookup that used to be a linear scan of the
@@ -164,6 +228,7 @@ async def find_and_consume_oauth_state(webhook_ctx, state: str) -> str | None:
     login fails with no error anyone can act on. `where=` filters in the
     database, so the row is found no matter how large the collection gets.
     """
+    import time as _time
     page = await webhook_ctx.store.query(
         OAUTH_STATES_COLLECTION, where={"state": state}, limit=1,
     )
@@ -171,7 +236,10 @@ async def find_and_consume_oauth_state(webhook_ctx, state: str) -> str | None:
         return None
     doc = page.data[0]
     owner = doc.data.get("imperal_id")
+    created_ts = doc.data.get("created_ts", 0)
     await webhook_ctx.store.delete(OAUTH_STATES_COLLECTION, doc.id)
+    if created_ts and (_time.time() - created_ts) > ttl_seconds:
+        return None
     return owner
 
 
