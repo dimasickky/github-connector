@@ -173,7 +173,19 @@ async def disable_all_repo_notifications(ctx) -> None:
     token, err = await github_client.get_user_token(ctx)
     if err:
         return  # no usable token left — nothing more we can do from our side
-    for record in await storage.list_repo_webhooks(ctx):
+    # This sweep is the one caller that genuinely needs EVERY row: a record we
+    # don't see here becomes an orphaned hook on GitHub, still POSTing at an
+    # integration that can no longer authorize it. Since the store cannot page,
+    # take the truncation flag and say so in the log rather than silently
+    # cleaning up "most" of them.
+    records, truncated = await storage.list_repo_webhooks_page(ctx)
+    if truncated:
+        await ctx.log(
+            "disconnect sweep: more repo webhooks than one page can return — "
+            "some GitHub-side hooks may remain and need manual removal",
+            level="warning",
+        )
+    for record in records:
         repo_full_name = record.get("repo_full_name", "")
         hook_id = record.get("github_hook_id")
         if repo_full_name and hook_id:

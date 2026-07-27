@@ -143,8 +143,10 @@ async def repos_overview(ctx) -> dict:
         login = conn.get("account_login") or ""
 
         # Cheap local read — how many repos this user wired up for live events.
+        # A real COUNT, not len() of a capped page: len(list) would report the
+        # page size as the total once the cap is reached.
         try:
-            watched = len(await storage.list_repo_webhooks(ctx))
+            watched = await storage.count_repo_webhooks(ctx)
         except Exception:
             watched = 0
 

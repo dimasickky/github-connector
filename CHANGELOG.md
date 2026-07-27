@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.9.1 — 2026-07-27 — Store reads: point lookups instead of scans
+
+### Fixed
+
+- **A sign-in could silently fail once enough OAuth states were parked.**
+  `find_and_consume_oauth_state` scanned the first 200 rows looking for a
+  matching `state`. That collection lives in the shared `__webhook__`
+  partition, so it holds the in-flight states of *every* user: past 200 rows a
+  perfectly valid `state` stopped being found and the login failed with nothing
+  actionable to show. Now a `where={"state": ...}` lookup — the database
+  filters, so the row is found regardless of collection size.
+- **The skeleton reported a page size as a total.** "Repos watched" was
+  `len(list_repo_webhooks(ctx))` — the length of a capped page. Now a real
+  server-side `store.count()`, which has no cap.
+- **The disconnect sweep could leave orphaned webhooks on GitHub without
+  saying so.** It needs *every* row: a record it misses stays on GitHub,
+  POSTing at an integration that can no longer authorize it. It now reads a
+  truncation flag and logs a warning instead of quietly cleaning up "most".
+
+### Notes
+
+- **Why this is not cursor paging.** `Page` carries `cursor`/`has_more`, and
+  `StoreProtocol` in `context.py` advertises a `cursor=` argument — but the
+  real client, `imperal_sdk/store/client.py` at SDK 5.9.12, accepts only
+  `limit`. There is no way to ask for page 2, so "loop until `has_more` is
+  false" cannot be written today. The fix is therefore the part that is
+  available and that actually matters: make every point lookup a `where=`
+  query (no cap can hurt it), use `count()` for totals, and give the one
+  genuine list a *named* ceiling plus a truncation signal rather than a bare
+  `limit=200` that reads like "all of them".
+- 6 new tests, including a state and a webhook set deliberately placed past the
+  old 200-row window. 97 total.
+
 ## v0.9.0 — 2026-07-27 — First batch operations, on a shared pattern
 
 ### Added

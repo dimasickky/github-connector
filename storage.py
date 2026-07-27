@@ -50,6 +50,14 @@ USER_TOKENS_COLLECTION = "gh_user_tokens"
 REPO_WEBHOOKS_COLLECTION = "gh_repo_webhooks"
 REPO_WEBHOOK_INDEX_COLLECTION = "gh_repo_webhook_index"
 
+# Ceiling for the one collection that is genuinely a LIST rather than a point
+# lookup. Cursor paging is not available: Page carries cursor/has_more and
+# StoreProtocol advertises `cursor=`, but the real StoreClient.query() (SDK
+# 5.9.12) takes only `limit`, so page 2 cannot be requested. Hence an explicit,
+# named ceiling plus a truncation signal for callers that need completeness —
+# never a bare number buried in a call site that reads like "all of them".
+_WEBHOOK_PAGE_LIMIT = 200
+
 
 def _store_for(ctx, user_id: str):
     """Build a StoreClient scoped to an arbitrary user_id, reusing ctx.store's
@@ -146,14 +154,25 @@ async def find_and_consume_oauth_state(webhook_ctx, state: str) -> str | None:
 
     Returns the imperal_id that owns this state, or None if unknown/expired/
     already consumed. One-shot: deletes on successful read.
+
+    Looked up with `where={"state": ...}`, NOT by paging through the
+    collection. This is a point lookup that used to be a linear scan of the
+    first 200 rows, and the difference is not cosmetic: the OAuth states of
+    EVERY user in flight share the "__webhook__" partition, so once more than
+    200 rows are parked here — concurrent sign-ins, or expired states that were
+    never swept — a perfectly valid `state` simply stops being found and the
+    login fails with no error anyone can act on. `where=` filters in the
+    database, so the row is found no matter how large the collection gets.
     """
-    page = await webhook_ctx.store.query(OAUTH_STATES_COLLECTION, limit=200)
-    for doc in page.data:
-        if doc.data.get("state") == state:
-            owner = doc.data.get("imperal_id")
-            await webhook_ctx.store.delete(OAUTH_STATES_COLLECTION, doc.id)
-            return owner
-    return None
+    page = await webhook_ctx.store.query(
+        OAUTH_STATES_COLLECTION, where={"state": state}, limit=1,
+    )
+    if not page.data:
+        return None
+    doc = page.data[0]
+    owner = doc.data.get("imperal_id")
+    await webhook_ctx.store.delete(OAUTH_STATES_COLLECTION, doc.id)
+    return owner
 
 
 # ── Connection record (§12.2 — no installation, no repo list) ──────────── #
@@ -253,10 +272,46 @@ async def get_repo_webhook(ctx, repo_full_name: str) -> dict | None:
     return page.data[0].data if page.data else None
 
 
+async def count_repo_webhooks(ctx) -> int:
+    """How many repos this user has a registered webhook on.
+
+    A real server-side COUNT, not `len(list_repo_webhooks(ctx))`. The list
+    version is capped by a `limit`, so using its length as a total is exactly
+    the bug where a page size gets reported as a quantity: past the cap the
+    skeleton would keep claiming the cap forever. `count()` has no cap.
+    """
+    return await ctx.store.count(REPO_WEBHOOKS_COLLECTION)
+
+
 async def list_repo_webhooks(ctx) -> list[dict]:
-    """List every repo this user has a registered webhook on."""
-    page = await ctx.store.query(REPO_WEBHOOKS_COLLECTION, limit=200)
+    """List every repo this user has a registered webhook on.
+
+    Returns at most `_WEBHOOK_PAGE_LIMIT` records. That cap is a real
+    limitation, not a formality, so callers that MUST see every row (the
+    disconnect sweep in handlers_webhook_events) check `repo_webhooks_truncated`
+    rather than assuming this list is complete.
+
+    Why not page through with a cursor: `Page` carries `cursor`/`has_more`, and
+    `StoreProtocol` advertises a `cursor=` argument — but the real client
+    (`imperal_sdk/store/client.py`, SDK 5.9.12) does NOT accept one, so there
+    is no way to ask for page 2. Paging is therefore impossible today; the
+    honest options are a documented ceiling plus a truncation signal, which is
+    what this does. A per-user webhook count realistically stays far below the
+    cap, and if it ever does not, the caller finds out instead of silently
+    doing partial work.
+    """
+    page = await ctx.store.query(REPO_WEBHOOKS_COLLECTION, limit=_WEBHOOK_PAGE_LIMIT)
     return [doc.data for doc in page.data]
+
+
+async def list_repo_webhooks_page(ctx) -> tuple[list[dict], bool]:
+    """`list_repo_webhooks` plus the truncation flag: (records, truncated).
+
+    Separate from the plain list so existing callers keep their simple shape
+    while the ones that need completeness can react.
+    """
+    page = await ctx.store.query(REPO_WEBHOOKS_COLLECTION, limit=_WEBHOOK_PAGE_LIMIT)
+    return [doc.data for doc in page.data], bool(page.has_more)
 
 
 async def delete_repo_webhook(ctx, repo_full_name: str) -> None:
