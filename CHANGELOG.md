@@ -1,5 +1,47 @@
 # Changelog
 
+## v0.9.0 — 2026-07-27 — First batch operations, on a shared pattern
+
+### Added
+
+- **`delete_branches`** — delete several branches in one call. Post-merge
+  cleanup was the original complaint: a dozen merged feature branches had to
+  go one call at a time.
+- **`close_issues`** — close several issues or PRs in one call, for triage.
+  Uses the same endpoint as the single-item tool (a PR is an issue
+  underneath).
+- **`bulk.py`** — the shared shape both go through, written once so the next
+  batch tool cannot be built "to taste". It enforces three things:
+  a **preview pass** that names every target and touches nothing until
+  `confirm=true`; a **50-item ceiling** checked before any network call; and
+  **bounded fan-out** (8 in flight, matching `tasks._BULK_CONCURRENCY`) with a
+  per-item result.
+
+### Notes
+
+- Per-item failure never sinks the batch. A branch that is already gone or
+  protected fails on its own and the rest still go through — on a cleanup run
+  "six of eight went, these two didn't and here's why" beats an
+  all-or-nothing refusal. Both counts appear in the summary, so a partial run
+  can never read as a clean one.
+- The ceiling is checked *before* the fan-out, which is the only placement
+  that protects anything: GitHub rate-limits bursts of mutating requests, and
+  a destructive run that dies at item 60 of 200 is unrecoverable, while a
+  refusal up front costs nothing.
+- **No `delete_repository`, and no bulk create — deliberately.** Deleting a
+  repository needs the `delete_repo` OAuth scope, which we do not request;
+  adding it would force every already-connected user to re-authorise and would
+  hand the token the power to erase any repo on the account. It also has no
+  undo, which is exactly why GitHub makes you type the repo name by hand — a
+  batch would erase that barrier and can fail halfway. Bulk *create* was left
+  out for a plainer reason: no real case asked for it yet, and an unused batch
+  is still surface to test and maintain.
+- 12 new tests, covering what the pattern exists to guarantee rather than
+  "delete works": nothing touched before confirm, oversized batch refused
+  before any HTTP call, partial failure reported per item, caller ordering
+  preserved, and an unexpected exception attributed to its own item. 91 total,
+  `imperal validate` 0 errors / 0 warnings.
+
 ## v0.8.0 — 2026-07-27 — Ambient repo context (first skeleton section)
 
 ### Added

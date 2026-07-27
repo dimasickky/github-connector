@@ -10,8 +10,9 @@ import base64
 
 from imperal_sdk import ActionResult, sdl
 from app import chat
-from models import CreateBranchParams, CreateOrUpdateFileParams, DeleteBranchParams, Branch, CommitResult, DestructiveActionResult
+from models import CreateBranchParams, CreateOrUpdateFileParams, DeleteBranchParams, DeleteBranchesParams, Branch, CommitResult, DestructiveActionResult
 from handlers_repos import _get_token, _split_repo
+import bulk
 import github_client
 
 
@@ -145,3 +146,67 @@ async def delete_branch(ctx, params: DeleteBranchParams) -> ActionResult:
         ),
         summary=f"Deleted branch '{params.branch}' in {params.repo}.",
     )
+
+
+@chat.function(
+    "delete_branches",
+    description=(
+        "Delete SEVERAL branches at once in a connected GitHub repository — the batch "
+        "version of delete_branch, for cleaning up merged feature branches. Requires an "
+        "explicit confirm=true on a second call; the first call only previews which "
+        "branches would be deleted."
+    ),
+    action_type="destructive",
+    data_model=bulk.BulkResult,
+    effects=["github.delete_branch"],
+    event="github-connector-extension.delete_branches",
+)
+async def delete_branches(ctx, params: DeleteBranchesParams) -> ActionResult:
+    """Delete a set of branch refs, bounded and reported per branch.
+
+    The realistic use is post-merge cleanup, where doing it one call at a time
+    is exactly the complaint that started this work. Everything about the
+    shape — preview, ceiling, bounded fan-out, per-item report — comes from
+    bulk.py so this cannot drift from the other batch tools.
+
+    A branch that is already gone, protected, or simply misspelled fails on
+    its own without touching the rest: on a cleanup run, "six of eight went,
+    these two didn't and here's why" is a far more useful answer than an
+    all-or-nothing refusal.
+    """
+    bad = bulk.validate_batch(params.branches, "branches")
+    if bad:
+        return bad
+
+    token, err = await _get_token(ctx)
+    if err:
+        return err
+
+    owner, name = _split_repo(params.repo)
+
+    if not params.confirm:
+        await ctx.log(
+            f"delete_branches: preview only (awaiting confirm) — "
+            f"{len(params.branches)} branch(es) in {params.repo}",
+            level="info",
+        )
+        return bulk.preview(
+            "delete", params.branches, "branch",
+            detail=f"Deleting a branch in {params.repo} is irreversible "
+                   f"if nothing else points at its commits.",
+        )
+
+    async def _delete_one(branch: str) -> str | None:
+        resp = await github_client.gh_delete(
+            ctx, token, f"/repos/{owner}/{name}/git/refs/heads/{branch}")
+        if resp.status_code >= 400:
+            return github_client.gh_error_message(resp.status_code)
+        return None
+
+    result = await bulk.run_bulk("delete", params.branches, "branch", _delete_one)
+    await ctx.log(
+        f"delete_branches: {result.data.succeeded} deleted, "
+        f"{result.data.failed} failed in {params.repo}",
+        level="info" if result.data.failed == 0 else "error",
+    )
+    return result

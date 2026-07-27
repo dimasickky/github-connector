@@ -2,7 +2,7 @@
   "manifest_schema_version": 3,
   "sdk_version": "5.9.12",
   "app_id": "github-connector-extension",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "name": "GitHub Connector",
   "description": "Browse your GitHub repositories, view code and commit history, and manage pull requests and issues directly from chat.",
   "icon": "icon.svg",
@@ -3120,6 +3120,209 @@
       "owner_chat_tool": "github-connector"
     },
     {
+      "name": "close_issues",
+      "description": "Close SEVERAL issues or pull requests at once in a connected GitHub repository — the batch version of close_pull_request_or_issue, for triage. Requires an explicit confirm=true on a second call; the first call only previews which ones would close.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "github.close_issue_or_pr"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "numbers": {
+            "description": "Issue or pull request numbers to close, e.g. [12, 15, 18]",
+            "items": {
+              "type": "integer"
+            },
+            "title": "Numbers",
+            "type": "array"
+          },
+          "confirm": {
+            "default": false,
+            "description": "Set true on a second call to actually close. First call (default) only previews which ones would close.",
+            "title": "Confirm",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "repo",
+          "numbers"
+        ],
+        "title": "CloseIssuesParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "BulkItemResult": {
+            "description": "One item's outcome inside a batch — success or the reason it failed.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "ok": {
+                "default": false,
+                "title": "Ok",
+                "type": "boolean"
+              },
+              "error": {
+                "default": "",
+                "title": "Error",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "BulkItemResult",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "description": "A batch's outcome: per-item results plus the two counts that matter.\n\n`needs_confirmation` doubles as the preview flag — on a preview pass the\nitems carry the intended targets and nothing has been touched yet.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/BulkItemResult"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "action": {
+            "default": "",
+            "title": "Action",
+            "type": "string"
+          },
+          "succeeded": {
+            "default": 0,
+            "title": "Succeeded",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "needs_confirmation": {
+            "default": false,
+            "title": "Needs Confirmation",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BulkResult",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "github-connector-extension.close_issues",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
       "name": "get_workflow_runs",
       "description": "List recent GitHub Actions workflow runs for a connected repository — status, conclusion, and branch of each.",
       "action_type": "read",
@@ -3849,6 +4052,209 @@
         "x-sdl": "entity"
       },
       "event": "github-connector-extension.delete_branch",
+      "background": false,
+      "long_running": false,
+      "scopes": [],
+      "owner_chat_tool": "github-connector"
+    },
+    {
+      "name": "delete_branches",
+      "description": "Delete SEVERAL branches at once in a connected GitHub repository — the batch version of delete_branch, for cleaning up merged feature branches. Requires an explicit confirm=true on a second call; the first call only previews which branches would be deleted.",
+      "action_type": "destructive",
+      "chain_callable": true,
+      "effects": [
+        "github.delete_branch"
+      ],
+      "id_projection": "",
+      "params_schema": {
+        "properties": {
+          "repo": {
+            "description": "Repository full name, e.g. 'owner/repo'",
+            "title": "Repo",
+            "type": "string"
+          },
+          "branches": {
+            "description": "Branch names to delete, e.g. ['feature/a', 'feature/b']",
+            "items": {
+              "type": "string"
+            },
+            "title": "Branches",
+            "type": "array"
+          },
+          "confirm": {
+            "default": false,
+            "description": "Set true on a second call to actually delete. First call (default) only previews which branches would go.",
+            "title": "Confirm",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "repo",
+          "branches"
+        ],
+        "title": "DeleteBranchesParams",
+        "type": "object"
+      },
+      "return_schema": {
+        "$defs": {
+          "BulkItemResult": {
+            "description": "One item's outcome inside a batch — success or the reason it failed.",
+            "properties": {
+              "id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  }
+                ],
+                "title": "Id"
+              },
+              "title": {
+                "title": "Title",
+                "type": "string"
+              },
+              "kind": {
+                "default": "",
+                "title": "Kind",
+                "type": "string"
+              },
+              "subtitle": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Subtitle"
+              },
+              "description": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Description"
+              },
+              "status": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Status"
+              },
+              "url": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Url"
+              },
+              "ok": {
+                "default": false,
+                "title": "Ok",
+                "type": "boolean"
+              },
+              "error": {
+                "default": "",
+                "title": "Error",
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "title": "BulkItemResult",
+            "type": "object",
+            "x-sdl": "entity"
+          }
+        },
+        "description": "A batch's outcome: per-item results plus the two counts that matter.\n\n`needs_confirmation` doubles as the preview flag — on a preview pass the\nitems carry the intended targets and nothing has been touched yet.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/$defs/BulkItemResult"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Total"
+          },
+          "page": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Page"
+          },
+          "has_more": {
+            "default": false,
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "action": {
+            "default": "",
+            "title": "Action",
+            "type": "string"
+          },
+          "succeeded": {
+            "default": 0,
+            "title": "Succeeded",
+            "type": "integer"
+          },
+          "failed": {
+            "default": 0,
+            "title": "Failed",
+            "type": "integer"
+          },
+          "needs_confirmation": {
+            "default": false,
+            "title": "Needs Confirmation",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "BulkResult",
+        "type": "object",
+        "x-sdl": "entity-list"
+      },
+      "event": "github-connector-extension.delete_branches",
       "background": false,
       "long_running": false,
       "scopes": [],

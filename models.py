@@ -258,6 +258,20 @@ class DestructiveActionResult(sdl.Entity):
     output: str = ""
 
 
+# ── Bulk variants (see bulk.py for the shared preview/ceiling/fan-out) ──── #
+
+class DeleteBranchesParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    branches: list[str] = Field(description="Branch names to delete, e.g. ['feature/a', 'feature/b']")
+    confirm: bool = Field(default=False, description="Set true on a second call to actually delete. First call (default) only previews which branches would go.")
+
+
+class CloseIssuesParams(BaseModel):
+    repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
+    numbers: list[int] = Field(description="Issue or pull request numbers to close, e.g. [12, 15, 18]")
+    confirm: bool = Field(default=False, description="Set true on a second call to actually close. First call (default) only previews which ones would close.")
+
+
 # ── P6: trigger existing CI/CD (workflow_dispatch) ──────────────────────── #
 
 class TriggerWorkflowParams(BaseModel):

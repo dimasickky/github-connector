@@ -12,7 +12,7 @@ if _EXT_DIR not in sys.path:
 # Purge stale cached modules so a fresh load always registers decorators correctly
 # (the validator may run multiple extensions in the same process).
 _LOCAL = ("app", "auth", "storage", "github_client", "error_codes", "models",
-          "panels", "panels_browser", "handlers_repos", "handlers_pulls",
+          "bulk", "panels", "panels_browser", "handlers_repos", "handlers_pulls",
           "handlers_issues", "handlers_actions", "handlers_content",
           "handlers_webhook_events", "skeleton")
 for _mod in _LOCAL:

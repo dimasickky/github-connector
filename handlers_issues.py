@@ -10,8 +10,9 @@ for those).
 """
 from imperal_sdk import ActionResult, sdl
 from app import chat
-from models import ListIssuesParams, GetIssueParams, CreateIssueParams, CommentParams, CloseParams, Issue, Comment, DestructiveActionResult
+from models import ListIssuesParams, GetIssueParams, CreateIssueParams, CommentParams, CloseParams, CloseIssuesParams, Issue, Comment, DestructiveActionResult
 from handlers_repos import _get_token, _split_repo
+import bulk
 import github_client
 
 
@@ -193,3 +194,68 @@ async def close_pull_request_or_issue(ctx, params: CloseParams) -> ActionResult:
         ),
         summary=f"Closed #{params.number} in {params.repo}.",
     )
+
+
+@chat.function(
+    "close_issues",
+    description=(
+        "Close SEVERAL issues or pull requests at once in a connected GitHub repository — "
+        "the batch version of close_pull_request_or_issue, for triage. Requires an explicit "
+        "confirm=true on a second call; the first call only previews which ones would close."
+    ),
+    action_type="destructive",
+    data_model=bulk.BulkResult,
+    effects=["github.close_issue_or_pr"],
+    event="github-connector-extension.close_issues",
+)
+async def close_issues(ctx, params: CloseIssuesParams) -> ActionResult:
+    """Close a set of issues/PRs by number, bounded and reported per item.
+
+    Triage is the case: a dozen stale issues reviewed in one sitting, closed
+    in one call instead of a dozen. Uses the same issues endpoint as the
+    single-item tool — a PR is an issue underneath — and the same shared
+    preview/ceiling/fan-out from bulk.py.
+
+    Closing is reversible on GitHub (an issue can be reopened), which is
+    exactly why this one gets a batch and deleting a repository does not.
+    """
+    numbers = [str(n) for n in params.numbers]
+    bad = bulk.validate_batch(numbers, "issue numbers")
+    if bad:
+        return bad
+
+    token, err = await _get_token(ctx)
+    if err:
+        return err
+
+    owner, name = _split_repo(params.repo)
+    targets = [f"#{n}" for n in numbers]
+
+    if not params.confirm:
+        await ctx.log(
+            f"close_issues: preview only (awaiting confirm) — "
+            f"{len(targets)} item(s) in {params.repo}",
+            level="info",
+        )
+        return bulk.preview(
+            "close", targets, "issue",
+            detail=f"They stay in {params.repo} and can be reopened afterwards.",
+        )
+
+    async def _close_one(target: str) -> str | None:
+        number = target.lstrip("#")
+        resp = await github_client.gh_patch(
+            ctx, token, f"/repos/{owner}/{name}/issues/{number}",
+            json_body={"state": "closed"},
+        )
+        if resp.status_code >= 400:
+            return github_client.gh_error_message(resp.status_code)
+        return None
+
+    result = await bulk.run_bulk("close", targets, "issue", _close_one)
+    await ctx.log(
+        f"close_issues: {result.data.succeeded} closed, "
+        f"{result.data.failed} failed in {params.repo}",
+        level="info" if result.data.failed == 0 else "error",
+    )
+    return result
