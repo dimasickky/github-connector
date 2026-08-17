@@ -1,5 +1,49 @@
 # Changelog
 
+## v0.9.4 — 2026-08-17 — File browser shows "last changed" info
+
+### Added
+
+- **Single-file view in the center panel now shows a "Last changed" bar**
+  above the code/markdown body: date, author, and commit message of the
+  most recent commit touching that exact file, plus a `ui.Link` straight to
+  the commit on GitHub. One extra API call
+  (`GET /repos/{owner}/{repo}/commits?path=...&per_page=1`), scoped strictly
+  to the single-file view — never the directory listing, where N files
+  would mean N extra GitHub calls per render (the same footgun
+  `list_recent_commits` already avoids via its own `path=` filter). Fully
+  best-effort: any non-2xx/empty response silently omits the bar instead of
+  failing the file view.
+- Directory listings are untouched — no new calls there, so browsing a repo
+  tree is exactly as fast as before.
+
+### Notes
+
+- First step toward a fuller "history + diff" view for files (tracked
+  separately) — `list_recent_commits(path=...)` already supports listing
+  more than one commit for a file's full history, and `gh_get_diff`
+  (already used for pull request diffs) can be pointed at a single commit's
+  SHA the same way, for a file-level diff view.
+
+## v0.9.3 — 2026-08-16 — SDK 5.9.22
+
+### Changed
+
+- **Bumped `imperal-sdk` 5.9.12 → 5.9.22.** Diffed both wheels directly before
+  touching the pin — every change on the way is additive and defaulted, and
+  this module touches none of the changed surfaces. Zero behavior change.
+
+### Notes
+
+- **Known technical debt, not addressed in this release.** `storage.py` and
+  `handlers_webhook_events.py` still read `ctx.store._gateway_url` /
+  `._auth_token` / `._extension_id` / `._tenant_id` directly to build a
+  scoped client — a private-attribute workaround the SDK's own 5.9.x
+  changelog names this extension in, as one of three carrying it. 5.9.22
+  ships the intended replacement, `StoreClient.for_user(user_id)` (and the
+  equivalent for Notify), but migrating is being tracked separately so it
+  can be tested in isolation rather than bundled into a version bump.
+
 ## v0.9.2 — 2026-07-27 — Connect-flow state tokens actually expire now
 
 ### Fixed

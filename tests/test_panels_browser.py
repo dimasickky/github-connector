@@ -83,6 +83,72 @@ async def test_center_panel_file_view_has_back_button_and_code_block():
 
 
 @pytest.mark.asyncio
+async def test_center_panel_file_view_shows_last_modified_bar():
+    ctx = await _seeded_ctx()
+    import base64
+    ctx.http.mock_get(
+        "/repos/octocat/hello-world/contents/app.py",
+        {"name": "app.py", "path": "app.py", "type": "file",
+         "encoding": "base64", "content": base64.b64encode(b"print('hi')").decode()},
+    )
+    ctx.http.mock_get(
+        "/repos/octocat/hello-world/commits",
+        [{
+            "sha": "abc1234567890",
+            "html_url": "https://github.com/octocat/hello-world/commit/abc1234567890",
+            "commit": {
+                "message": "fix: correct bucket move route\n\nlonger body here",
+                "author": {"name": "dimasickky", "date": "2026-08-15T10:30:00Z"},
+            },
+            "author": {"login": "dimasickky"},
+        }],
+    )
+    result = await panels_browser.center(ctx, repo="octocat/hello-world", path="app.py")
+    payload = result.to_dict()
+    # breadcrumb is itself a Stack, so find specifically the one wrapping a KeyValue.
+    kv_stacks = [
+        c for c in payload["props"]["children"]
+        if c.get("type") == "Stack"
+        and any(ch.get("type") == "KeyValue" for ch in c["props"]["children"])
+    ]
+    assert kv_stacks, "expected a Stack wrapping the last-modified KeyValue + Link"
+    stack = kv_stacks[0]
+    inner_types = [c.get("type") for c in stack["props"]["children"]]
+    assert "KeyValue" in inner_types
+    assert "Link" in inner_types
+    kv = next(c for c in stack["props"]["children"] if c.get("type") == "KeyValue")
+    kv_map = {item["key"]: item["value"] for item in kv["props"]["items"]}
+    assert kv_map["Last changed"] == "2026-08-15T10:30:00Z"
+    assert kv_map["Author"] == "dimasickky"
+    assert kv_map["Message"] == "fix: correct bucket move route"
+    link = next(c for c in stack["props"]["children"] if c.get("type") == "Link")
+    assert link["props"]["href"] == "https://github.com/octocat/hello-world/commit/abc1234567890"
+
+
+@pytest.mark.asyncio
+async def test_center_panel_file_view_omits_bar_when_no_commits_found():
+    ctx = await _seeded_ctx()
+    import base64
+    ctx.http.mock_get(
+        "/repos/octocat/hello-world/contents/app.py",
+        {"name": "app.py", "path": "app.py", "type": "file",
+         "encoding": "base64", "content": base64.b64encode(b"print('hi')").decode()},
+    )
+    ctx.http.mock_get("/repos/octocat/hello-world/commits", [])
+    result = await panels_browser.center(ctx, repo="octocat/hello-world", path="app.py")
+    payload = result.to_dict()
+    # breadcrumb is still a Stack — assert no Stack contains a KeyValue (the bar itself).
+    kv_stacks = [
+        c for c in payload["props"]["children"]
+        if c.get("type") == "Stack"
+        and any(ch.get("type") == "KeyValue" for ch in c["props"]["children"])
+    ]
+    assert not kv_stacks
+    types = [c.get("type") for c in payload["props"]["children"]]
+    assert "Code" in types
+
+
+@pytest.mark.asyncio
 async def test_center_panel_readme_renders_as_markdown_not_code():
     ctx = await _seeded_ctx()
     import base64

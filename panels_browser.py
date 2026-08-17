@@ -69,10 +69,60 @@ async def center(ctx, repo="", path="", ref="", **kwargs):
     else:
         language = github_client.guess_language(filename)
         body_node = ui.Code(content=content, language=language, line_numbers=True)
-    code_children = [breadcrumb, body_node]
+
+    last_modified_bar = await _last_modified_bar(ctx, token, owner, name, path, ref)
+
+    code_children = [breadcrumb]
+    if last_modified_bar:
+        code_children.append(last_modified_bar)
+    code_children.append(body_node)
     if back_bar:
         code_children = [back_bar] + code_children
     return ui.Page(title=data.get("name", path), subtitle=repo, children=code_children)
+
+
+async def _last_modified_bar(ctx, token: str, owner: str, name: str, path: str, ref: str):
+    """One extra GitHub call, scoped ONLY to the single-file view (never the
+    directory listing — N files in a dir would mean N extra API calls per
+    render, which panel-troubleshooting/performance guidance explicitly
+    warns against). Reuses the exact same
+    GET /repos/{owner}/{repo}/commits?path=...&per_page=1 endpoint
+    handlers_repos.list_recent_commits already calls for the chat tool, so
+    behavior (and rate-limit cost) is identical to something we already ship.
+
+    Best-effort: any non-2xx or empty result silently omits the bar instead
+    of failing the whole file view — this is decoration, not the file's
+    actual content.
+    """
+    q = {"path": path, "per_page": 1}
+    if ref:
+        q["sha"] = ref
+    try:
+        resp = await github_client.gh_get(ctx, token, f"/repos/{owner}/{name}/commits", q)
+    except Exception:
+        return None
+    if resp.status_code != 200:
+        return None
+    commits = resp.json()
+    if not commits:
+        return None
+    c = commits[0]
+    commit_info = c.get("commit", {}) or {}
+    author_name = (commit_info.get("author", {}) or {}).get("name", "") \
+        or (c.get("author") or {}).get("login", "") or "unknown"
+    date = (commit_info.get("author", {}) or {}).get("date", "")
+    message = (commit_info.get("message", "") or "").splitlines()[0][:120]
+    commit_url = c.get("html_url", "")
+
+    items = [
+        {"key": "Last changed", "value": date or "unknown"},
+        {"key": "Author", "value": author_name},
+        {"key": "Message", "value": message or "(no message)"},
+    ]
+    children = [ui.KeyValue(items=items, columns=3)]
+    if commit_url:
+        children.append(ui.Link(label=f"View commit {c.get('sha', '')[:7]}", href=commit_url))
+    return ui.Stack(direction="v", gap=1, children=children)
 
 
 def _back_bar(repo: str, path: str, ref: str):
