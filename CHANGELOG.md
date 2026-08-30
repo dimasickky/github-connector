@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.9.5 — 2026-08-31 — SDK 5.13.1, public re-scoping API, standard Back button
+
+### Changed
+
+- **imperal-sdk 5.9.22 → 5.13.1** — new gateway namespaces
+  (`ctx.conversations/users/apps/rbac`), unified callable catalog
+  (`imperal_sdk.catalog.callable_functions`), `ui.BackButton`, tray/menu
+  contributions, `tests/`-fixture deploy scan fix.
+- `storage._store_for` and `handlers_webhook_events._notify_for` now use
+  `ctx.store.for_user(uid)` / `ctx.notify.for_user(uid)` — the public API
+  that replaced the rebuild-from-private-attributes workaround.
+- File browser's `_back_bar` renders the standard `ui.BackButton`
+  ("← Back to <parent>") instead of a hand-rolled ghost button.
+
 ## v0.9.4 — 2026-08-17 — File browser shows "last changed" info
 
 ### Added

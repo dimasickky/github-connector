@@ -134,8 +134,9 @@ def _back_bar(repo: str, path: str, ref: str):
     if not path:
         return None
     parent = path.rsplit("/", 1)[0] if "/" in path else ""
-    return ui.Button("Back", icon="ArrowLeft", variant="ghost", size="sm",
-                      on_click=ui.Call("__panel__center", repo=repo, path=parent, ref=ref))
+    parent_label = parent.rsplit("/", 1)[-1] if parent else repo
+    return ui.BackButton(to=parent_label,
+                         on_click=ui.Call("__panel__center", repo=repo, path=parent, ref=ref))
 
 
 def _breadcrumb(repo: str, path: str, ref: str):

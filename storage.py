@@ -96,26 +96,16 @@ def _store_for(ctx, user_id: str):
       building the StoreClient directly instead of asking the Context to
       re-scope itself.)
 
-    In tests, ctx.store is a MockStore (imperal_sdk.testing) — a plain
-    in-memory dict with no gateway/auth/tenant attributes at all, since
-    tests never cross a real user boundary. Rather than special-case every
-    test around a StoreClient it can't construct, fall back to ctx.store
-    itself when those attributes aren't present — the collections still
-    round-trip correctly for the behavior we actually test (state
-    written/consumed, connection saved/read), just without real
-    per-pseudo-user network partitioning (which MockStore has no concept of
-    to begin with).
+    Uses the SDK's public ``StoreClient.for_user`` (imperal-sdk >= 5.9.22).
+    In tests, ctx.store is a MockStore (imperal_sdk.testing) with no
+    ``for_user`` — fall back to ctx.store itself; the collections still
+    round-trip correctly for the behavior we actually test, just without
+    real per-pseudo-user network partitioning (which MockStore has no
+    concept of to begin with).
     """
-    if not hasattr(ctx.store, "_gateway_url"):
+    if not hasattr(ctx.store, "for_user"):
         return ctx.store
-    from imperal_sdk.store.client import StoreClient
-    return StoreClient(
-        gateway_url=ctx.store._gateway_url,
-        service_token=ctx.store._auth_token,
-        extension_id=ctx.store._extension_id,
-        user_id=user_id,
-        tenant_id=ctx.store._tenant_id,
-    )
+    return ctx.store.for_user(user_id)
 
 
 def _extensions_for(ctx, user_id: str):

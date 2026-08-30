@@ -202,15 +202,9 @@ def _notify_for(webhook_ctx, imperal_id: str):
     (rebuild the client with a different user_id, reusing gateway/auth wiring)
     since ctx.as_user() requires system-context, which a webhook ctx is not.
     """
-    if not hasattr(webhook_ctx.notify, "_gateway_url"):
+    if not hasattr(webhook_ctx.notify, "for_user"):
         return webhook_ctx.notify  # test double (MockNotify) — already records by call, no per-user split needed
-    from imperal_sdk.notify.client import NotifyClient
-    return NotifyClient(
-        gateway_url=webhook_ctx.notify._gateway_url,
-        service_token=webhook_ctx.notify._auth_token,
-        user_id=imperal_id,
-        extension_id=getattr(webhook_ctx.notify, "_extension_id", "github-connector-extension"),
-    )
+    return webhook_ctx.notify.for_user(imperal_id)
 
 
 def _verify_signature(secret: str, body: str, signature_header: str) -> bool:

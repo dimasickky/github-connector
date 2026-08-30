@@ -53,9 +53,10 @@ async def test_center_panel_subdir_has_back_button_to_parent():
     payload = result.to_dict()
     back_buttons = [
         c for c in payload["props"]["children"]
-        if c.get("type") == "Button" and c.get("props", {}).get("label") == "Back"
+        if c.get("type") == "Button" and c.get("props", {}).get("label", "").startswith("← Back")
     ]
     assert len(back_buttons) == 1
+    assert back_buttons[0]["props"]["label"] == "← Back to src"
     action = back_buttons[0]["props"]["on_click"]
     assert action["action"] == "call"
     assert action["params"]["path"] == "src"
@@ -76,9 +77,10 @@ async def test_center_panel_file_view_has_back_button_and_code_block():
     assert "Code" in types
     back_buttons = [
         c for c in payload["props"]["children"]
-        if c.get("type") == "Button" and c.get("props", {}).get("label") == "Back"
+        if c.get("type") == "Button" and c.get("props", {}).get("label", "").startswith("← Back")
     ]
     assert len(back_buttons) == 1
+    assert back_buttons[0]["props"]["label"] == "← Back to octocat/hello-world"
     assert back_buttons[0]["props"]["on_click"]["params"]["path"] == ""
 
 
