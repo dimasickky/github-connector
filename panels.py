@@ -25,6 +25,8 @@ import handlers_repos
     default_width=280,
     min_width=200,
     max_width=400,
+    stale_while_revalidate=True,
+    cache_ttl=60,
     refresh="on_event:github-connector.install_connected,github-connector.install_disconnected",
 )
 async def sidebar(ctx, **kwargs):

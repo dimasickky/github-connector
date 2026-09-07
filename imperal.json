@@ -1,8 +1,8 @@
 {
   "manifest_schema_version": 3,
-  "sdk_version": "5.13.1",
+  "sdk_version": "5.15.1",
   "app_id": "github-connector-extension",
-  "version": "0.9.5",
+  "version": "0.10.0",
   "name": "GitHub Connector",
   "description": "Browse your GitHub repositories, view code and commit history, and manage pull requests and issues directly from chat.",
   "icon": "icon.svg",
@@ -4552,6 +4552,13 @@
       "scope": "app"
     }
   ],
+  "search_providers": [
+    {
+      "entity_type": "github_repos",
+      "handler": "search_provider_github_repos",
+      "description": "Search accessible GitHub repositories by name"
+    }
+  ],
   "panels": [
     {
       "panel_id": "secrets",
@@ -4560,7 +4567,9 @@
       "tree": {},
       "icon": "KeyRound",
       "refresh": "manual",
-      "center_overlay": false
+      "center_overlay": false,
+      "stale_while_revalidate": true,
+      "cache_ttl": 60
     },
     {
       "panel_id": "sidebar",
@@ -4570,6 +4579,8 @@
       "icon": "",
       "refresh": "on_event:github-connector.install_connected,github-connector.install_disconnected",
       "center_overlay": false,
+      "stale_while_revalidate": true,
+      "cache_ttl": 60,
       "default_width": 280,
       "min_width": 200,
       "max_width": 400
@@ -4581,7 +4592,9 @@
       "tree": {},
       "icon": "",
       "refresh": "manual",
-      "center_overlay": true
+      "center_overlay": true,
+      "stale_while_revalidate": true,
+      "cache_ttl": 60
     }
   ]
 }

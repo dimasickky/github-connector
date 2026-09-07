@@ -2,7 +2,7 @@ from imperal_sdk import Extension, ChatExtension
 
 ext = Extension(
     "github-connector-extension",
-    version="0.9.5",
+    version="0.10.0",
     capabilities=["vcs:read", "vcs:write", "vcs:merge", "vcs:admin", "ci:trigger", "auth:oauth"],
     display_name="GitHub Connector",
     description=(
@@ -12,6 +12,46 @@ ext = Extension(
     icon="icon.svg",
     actions_explicit=True,
 )
+
+# ─── Semantic Omnisearch Provider (SDK 5.15+) ─────────────────────────────── #
+
+from imperal_sdk.search import SearchEntityResult
+import github_client
+
+
+@ext.search_provider("github_repos", description="Search accessible GitHub repositories by name")
+async def search_provider_github_repos(ctx, query: str) -> list[SearchEntityResult]:
+    """Provide GitHub repositories for global Cmd+K omnisearch."""
+    if not query or not query.strip():
+        return []
+    token, err = await github_client.get_user_token(ctx)
+    if err or not token:
+        return []
+    try:
+        resp = await github_client.gh_get(ctx, token, "/user/repos", {
+            "per_page": 50, "affiliation": "owner,collaborator,organization_member", "sort": "updated",
+        })
+        if resp.status_code != 200:
+            return []
+        repos = resp.json()
+        q = query.strip().lower()
+        matches = [r for r in repos if q in (r.get("full_name") or "").lower()]
+        results = []
+        for r in matches[:10]:
+            name = r.get("full_name", "")
+            desc = r.get("description") or f"Default branch: {r.get('default_branch', 'main')}"
+            results.append(SearchEntityResult(
+                id=str(r.get("id", name)),
+                title=name,
+                type="github_repo",
+                snippet=desc[:120],
+                url=f"/workspace/github-connector?repo={name}",
+                metadata={"full_name": name, "private": r.get("private", False)},
+            ))
+        return results
+    except Exception:
+        return []
+
 
 chat = ChatExtension(
     ext, tool_name="github-connector",

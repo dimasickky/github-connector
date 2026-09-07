@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.10.0 — 2026-09-07 — SDK 5.15.1, Omnisearch & SWR caching
+
+### Added
+
+- **Semantic Omnisearch (`@ext.search_provider`)** — registered `github_repos` provider for Cmd+K search across accessible GitHub repositories.
+- **Stale-While-Revalidate Caching** — added `stale_while_revalidate=True, cache_ttl=60` to sidebar panel for instant UI rendering.
+
+### Changed
+
+- **imperal-sdk 5.13.1 → 5.15.1** — bumped SDK requirement and regenerated manifest.
+
 ## v0.9.5 — 2026-08-31 — SDK 5.13.1, public re-scoping API, standard Back button
 
 ### Changed
