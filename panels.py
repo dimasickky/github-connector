@@ -57,7 +57,9 @@ async def sidebar(ctx, **kwargs):
     if err:
         return ui.Stack(gap=3, children=[
             header,
-            ui.Alert(message=err.error or "Could not reach GitHub.", type="error"),
+            ui.Alert(title="Connection Error", message=err.error or "Could not reach GitHub.", type="error"),
+            ui.Button("Try again", icon="RotateCcw", variant="secondary", size="sm",
+                      on_click=ui.Call("__panel__sidebar")),
         ])
 
     resp = await github_client.gh_get(ctx, token, "/user/repos", {
@@ -65,7 +67,11 @@ async def sidebar(ctx, **kwargs):
     })
     stats_bar = None
     if resp.status_code != 200:
-        repo_list = ui.Alert(message=github_client.gh_error_message(resp.status_code), type="error")
+        repo_list = ui.Stack([
+            ui.Alert(title="Sync Error", message=github_client.gh_error_message(resp.status_code), type="error"),
+            ui.Button("Try again", icon="RotateCcw", variant="secondary", size="sm",
+                      on_click=ui.Call("__panel__sidebar")),
+        ], gap=2)
     else:
         repos = resp.json()
         if not repos:

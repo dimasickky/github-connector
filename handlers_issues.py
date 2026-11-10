@@ -43,9 +43,10 @@ async def list_issues(ctx, params: ListIssuesParams) -> ActionResult:
         return err
 
     owner, name = _split_repo(params.repo)
+    per_page = params.per_page if params.per_page != 20 or params.limit == 20 else params.limit
     resp = await github_client.gh_get(
         ctx, token, f"/repos/{owner}/{name}/issues",
-        params={"state": params.state, "per_page": params.limit},
+        params={"state": params.state, "per_page": per_page, "page": params.page},
     )
     if resp.status_code >= 400:
         return ActionResult.error(github_client.gh_error_message(resp.status_code), retryable=True)

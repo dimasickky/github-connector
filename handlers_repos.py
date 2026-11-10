@@ -15,7 +15,7 @@ from app import chat
 from error_codes import GH_NOT_CONNECTED, GH_REPO_NOT_ACCESSIBLE, GH_FILE_NOT_FOUND
 from imperal_sdk.chat.error_codes import INTERNAL
 from models import (
-    _NoParams, RepoParams, FileContentsParams, ListCommitsParams,
+    _NoParams, ListRepositoriesParams, RepoParams, FileContentsParams, ListCommitsParams,
     SearchCodeParams, ListReleasesParams, CreateRepositoryParams,
     Repository, FileEntry, FileContent, Commit, Contributor,
     CodeSearchResult, Release,
@@ -40,11 +40,11 @@ def _split_repo(repo: str) -> tuple[str, str]:
 
 @chat.function(
     "list_repositories",
-    description="List the GitHub repositories your connected account has access to (owned, collaborator, and organization repos).",
+    description="List the GitHub repositories your connected account has access to (owned, collaborator, and organization repos). Supports pagination via page and per_page.",
     action_type="read",
     data_model=sdl.EntityList[Repository],
 )
-async def list_repositories(ctx, params: _NoParams) -> ActionResult:
+async def list_repositories(ctx, params: ListRepositoriesParams) -> ActionResult:
     """GET /user/repos — a classic OAuth token has no installation concept
     (§12.2), so this simply lists every repo the connected account can
     reach with the granted scopes (affiliation=owner,collaborator,
@@ -52,8 +52,13 @@ async def list_repositories(ctx, params: _NoParams) -> ActionResult:
     token, err = await _get_token(ctx)
     if err:
         return err
+    page = getattr(params, "page", 1) or 1
+    per_page = getattr(params, "per_page", 30) or 30
     resp = await github_client.gh_get(ctx, token, "/user/repos", {
-        "per_page": 100, "affiliation": "owner,collaborator,organization_member", "sort": "updated",
+        "page": page,
+        "per_page": per_page,
+        "affiliation": "owner,collaborator,organization_member",
+        "sort": "updated",
     })
     if resp.status_code != 200:
         return ActionResult.error(github_client.gh_error_message(resp.status_code),

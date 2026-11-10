@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.11.0 — 2026-11-11 — Full Pagination, Commit Diff View & Branch Highlighting
+
+### Added
+- **Full API Pagination** (`handlers_repos.py`, `handlers_issues.py`, `handlers_pulls.py`, `models.py`) — added `page` and `per_page` parameters to `list_repositories`, `list_issues`, and `list_pull_requests`.
+- **Commit Diff & Branch Highlighting** (`panels_browser.py`) — syntax-highlighted commit diff view and ref tags.
+- **Resilience & Error UX** (`panels.py`) — connection and sync error banners with retry buttons.
+
 ## v0.10.1 — 2026-11-10 — SDK 6.5.3 & Manifest category
 
 ### Changed

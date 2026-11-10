@@ -4,8 +4,14 @@ from pydantic import BaseModel, Field
 from imperal_sdk import sdl
 
 
+class ListRepositoriesParams(BaseModel):
+    page: int = Field(default=1, ge=1, description="Page number for pagination (starts at 1)")
+    per_page: int = Field(default=30, ge=1, le=100, description="Number of repositories per page (max 100)")
+
+
 class _NoParams(BaseModel):
-    pass
+    page: int = Field(default=1, ge=1, description="Page number for pagination (starts at 1)")
+    per_page: int = Field(default=30, ge=1, le=100, description="Number of repositories per page (max 100)")
 
 
 # ── P2: read-only repo browsing ──────────────────────────────────────────── #
@@ -103,6 +109,8 @@ class ListPullsParams(BaseModel):
     repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
     state: str = Field(default="open", description="'open', 'closed', or 'all'")
     limit: int = Field(default=20, ge=1, le=100, description="Max pull requests to return, 1-100")
+    page: int = Field(default=1, ge=1, description="Page number for pagination (starts at 1)")
+    per_page: int = Field(default=20, ge=1, le=100, description="Number of pull requests per page (1-100)")
 
 
 class GetPullRequestParams(BaseModel):
@@ -114,6 +122,8 @@ class ListIssuesParams(BaseModel):
     repo: str = Field(description="Repository full name, e.g. 'owner/repo'")
     state: str = Field(default="open", description="'open', 'closed', or 'all'")
     limit: int = Field(default=20, ge=1, le=100, description="Max issues to return, 1-100")
+    page: int = Field(default=1, ge=1, description="Page number for pagination (starts at 1)")
+    per_page: int = Field(default=20, ge=1, le=100, description="Number of issues per page (1-100)")
 
 
 class GetIssueParams(BaseModel):

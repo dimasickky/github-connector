@@ -1,7 +1,7 @@
 {
   "sdk_version": "6.5.3",
   "app_id": "github-connector-extension",
-  "version": "0.10.1",
+  "version": "0.11.0",
   "name": "GitHub Connector",
   "description": "Browse your GitHub repositories, view code and commit history, and manage pull requests and issues directly from chat.",
   "icon": "icon.svg",
@@ -18,7 +18,7 @@
   "tools": [
     {
       "name": "skeleton_refresh_repos_overview",
-      "description": "Connected GitHub account — login, and the most recently updated repositories (name, private flag, language, stars, default branch) plus how many repos have live notifications enabled. Ambient context so the assistant knows what the user is working on without an explicit lookup.",
+      "description": "Connected GitHub account \u2014 login, and the most recently updated repositories (name, private flag, language, stars, default branch) plus how many repos have live notifications enabled. Ambient context so the assistant knows what the user is working on without an explicit lookup.",
       "scopes": [],
       "parameters": {}
     },
@@ -39,7 +39,7 @@
     },
     {
       "name": "connect_github",
-      "description": "Get the link to connect your GitHub account — opens GitHub's own authorization page. Use this when the user wants to connect/link their GitHub account.",
+      "description": "Get the link to connect your GitHub account \u2014 opens GitHub's own authorization page. Use this when the user wants to connect/link their GitHub account.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -71,7 +71,7 @@
     },
     {
       "name": "disconnect_github",
-      "description": "Disconnect your GitHub account — removes the stored access token. GitHub's own authorization record is not revoked automatically (revoke it from github.com/settings/applications if you also want that gone); this just makes Imperal forget about it. Requires an explicit confirm=true on a second call — the first call only previews.",
+      "description": "Disconnect your GitHub account \u2014 removes the stored access token. GitHub's own authorization record is not revoked automatically (revoke it from github.com/settings/applications if you also want that gone); this just makes Imperal forget about it. Requires an explicit confirm=true on a second call \u2014 the first call only previews.",
       "action_type": "destructive",
       "chain_callable": true,
       "effects": [
@@ -362,7 +362,7 @@
     },
     {
       "name": "create_repository",
-      "description": "Create a new GitHub repository — in your personal account, or inside an organization you belong to (pass org=).",
+      "description": "Create a new GitHub repository \u2014 in your personal account, or inside an organization you belong to (pass org=).",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -856,7 +856,7 @@
       "params_schema": {
         "properties": {
           "repo": {
-            "description": "Repository full name, e.g. 'owner/repo' — from list_repositories",
+            "description": "Repository full name, e.g. 'owner/repo' \u2014 from list_repositories",
             "title": "Repo",
             "type": "string"
           }
@@ -1017,7 +1017,7 @@
     },
     {
       "name": "search_code",
-      "description": "Search for code inside a GitHub repository. Accepts GitHub's own code-search syntax (e.g. 'TODO language:python', 'def parse_args path:src') — the repo qualifier is added automatically from the repo param.",
+      "description": "Search for code inside a GitHub repository. Accepts GitHub's own code-search syntax (e.g. 'TODO language:python', 'def parse_args path:src') \u2014 the repo qualifier is added automatically from the repo param.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -1030,7 +1030,7 @@
             "type": "string"
           },
           "query": {
-            "description": "Search terms — GitHub's own code search syntax works, e.g. 'TODO language:python', 'def parse_args path:src'",
+            "description": "Search terms \u2014 GitHub's own code search syntax works, e.g. 'TODO language:python', 'def parse_args path:src'",
             "title": "Query",
             "type": "string"
           },
@@ -1621,7 +1621,7 @@
     },
     {
       "name": "get_pull_request",
-      "description": "Get full details of a single pull request by number — title, body, state, branches, draft status, labels, assignees, and mergeable_state.",
+      "description": "Get full details of a single pull request by number \u2014 title, body, state, branches, draft status, labels, assignees, and mergeable_state.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -2009,7 +2009,7 @@
     },
     {
       "name": "merge_pull_request",
-      "description": "Merge an open pull request in a connected GitHub repository. This is irreversible on GitHub's side, so it requires an explicit confirm=true on a second call — the first call only previews the merge.",
+      "description": "Merge an open pull request in a connected GitHub repository. This is irreversible on GitHub's side, so it requires an explicit confirm=true on a second call \u2014 the first call only previews the merge.",
       "action_type": "destructive",
       "chain_callable": true,
       "effects": [
@@ -2150,7 +2150,7 @@
     },
     {
       "name": "review_pull_request",
-      "description": "Submit a formal review on a pull request — APPROVE, REQUEST_CHANGES, or a plain COMMENT. This is a real GitHub review (POST /pulls/{number}/reviews), distinct from comment_on_issue_or_pr's plain issue-style comment: it shows up as an actual review verdict with the green/red badge on the PR.",
+      "description": "Submit a formal review on a pull request \u2014 APPROVE, REQUEST_CHANGES, or a plain COMMENT. This is a real GitHub review (POST /pulls/{number}/reviews), distinct from comment_on_issue_or_pr's plain issue-style comment: it shows up as an actual review verdict with the green/red badge on the PR.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -2296,7 +2296,7 @@
     },
     {
       "name": "list_issues",
-      "description": "List issues on a connected GitHub repository (open by default). Pull requests are excluded — use list_pull_requests for those.",
+      "description": "List issues on a connected GitHub repository (open by default). Pull requests are excluded \u2014 use list_pull_requests for those.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -2510,7 +2510,7 @@
     },
     {
       "name": "get_issue",
-      "description": "Get full details of a single issue by number — title, body, state, comment count, labels, assignees.",
+      "description": "Get full details of a single issue by number \u2014 title, body, state, comment count, labels, assignees.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -2985,7 +2985,7 @@
     },
     {
       "name": "close_pull_request_or_issue",
-      "description": "Close an open pull request or issue in a connected GitHub repository (without merging). Requires an explicit confirm=true on a second call — the first call only previews the close.",
+      "description": "Close an open pull request or issue in a connected GitHub repository (without merging). Requires an explicit confirm=true on a second call \u2014 the first call only previews the close.",
       "action_type": "destructive",
       "chain_callable": true,
       "effects": [
@@ -3120,7 +3120,7 @@
     },
     {
       "name": "close_issues",
-      "description": "Close SEVERAL issues or pull requests at once in a connected GitHub repository — the batch version of close_pull_request_or_issue, for triage. Requires an explicit confirm=true on a second call; the first call only previews which ones would close.",
+      "description": "Close SEVERAL issues or pull requests at once in a connected GitHub repository \u2014 the batch version of close_pull_request_or_issue, for triage. Requires an explicit confirm=true on a second call; the first call only previews which ones would close.",
       "action_type": "destructive",
       "chain_callable": true,
       "effects": [
@@ -3159,7 +3159,7 @@
       "return_schema": {
         "$defs": {
           "BulkItemResult": {
-            "description": "One item's outcome inside a batch — success or the reason it failed.",
+            "description": "One item's outcome inside a batch \u2014 success or the reason it failed.",
             "properties": {
               "id": {
                 "anyOf": [
@@ -3249,7 +3249,7 @@
             "x-sdl": "entity"
           }
         },
-        "description": "A batch's outcome: per-item results plus the two counts that matter.\n\n`needs_confirmation` doubles as the preview flag — on a preview pass the\nitems carry the intended targets and nothing has been touched yet.",
+        "description": "A batch's outcome: per-item results plus the two counts that matter.\n\n`needs_confirmation` doubles as the preview flag \u2014 on a preview pass the\nitems carry the intended targets and nothing has been touched yet.",
         "properties": {
           "items": {
             "items": {
@@ -3323,7 +3323,7 @@
     },
     {
       "name": "get_workflow_runs",
-      "description": "List recent GitHub Actions workflow runs for a connected repository — status, conclusion, and branch of each.",
+      "description": "List recent GitHub Actions workflow runs for a connected repository \u2014 status, conclusion, and branch of each.",
       "action_type": "read",
       "chain_callable": true,
       "effects": [],
@@ -3515,7 +3515,7 @@
     },
     {
       "name": "trigger_workflow_dispatch",
-      "description": "Trigger an existing GitHub Actions workflow in a connected repository — the workflow must already declare a workflow_dispatch trigger (this doesn't create or modify workflows, only runs one that's already there). This is the 'deploy from chat' path: it runs whatever CI/CD the user already set up.",
+      "description": "Trigger an existing GitHub Actions workflow in a connected repository \u2014 the workflow must already declare a workflow_dispatch trigger (this doesn't create or modify workflows, only runs one that's already there). This is the 'deploy from chat' path: it runs whatever CI/CD the user already set up.",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -3530,7 +3530,7 @@
             "type": "string"
           },
           "workflow": {
-            "description": "Workflow file name (e.g. 'deploy.yml') or numeric workflow ID — from get_workflow_runs",
+            "description": "Workflow file name (e.g. 'deploy.yml') or numeric workflow ID \u2014 from get_workflow_runs",
             "title": "Workflow",
             "type": "string"
           },
@@ -3781,7 +3781,7 @@
     },
     {
       "name": "create_or_update_file",
-      "description": "Create or update a single file in a connected GitHub repository — this IS a commit (one file per call).",
+      "description": "Create or update a single file in a connected GitHub repository \u2014 this IS a commit (one file per call).",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -3801,7 +3801,7 @@
             "type": "string"
           },
           "content": {
-            "description": "New full file content (plain text — encoded to base64 internally)",
+            "description": "New full file content (plain text \u2014 encoded to base64 internally)",
             "title": "Content",
             "type": "string"
           },
@@ -3923,7 +3923,7 @@
     },
     {
       "name": "delete_branch",
-      "description": "Delete a branch in a connected GitHub repository. Irreversible if the branch has no other pointer to it, so it requires an explicit confirm=true on a second call — the first call only previews the deletion.",
+      "description": "Delete a branch in a connected GitHub repository. Irreversible if the branch has no other pointer to it, so it requires an explicit confirm=true on a second call \u2014 the first call only previews the deletion.",
       "action_type": "destructive",
       "chain_callable": true,
       "effects": [
@@ -4058,7 +4058,7 @@
     },
     {
       "name": "delete_branches",
-      "description": "Delete SEVERAL branches at once in a connected GitHub repository — the batch version of delete_branch, for cleaning up merged feature branches. Requires an explicit confirm=true on a second call; the first call only previews which branches would be deleted.",
+      "description": "Delete SEVERAL branches at once in a connected GitHub repository \u2014 the batch version of delete_branch, for cleaning up merged feature branches. Requires an explicit confirm=true on a second call; the first call only previews which branches would be deleted.",
       "action_type": "destructive",
       "chain_callable": true,
       "effects": [
@@ -4097,7 +4097,7 @@
       "return_schema": {
         "$defs": {
           "BulkItemResult": {
-            "description": "One item's outcome inside a batch — success or the reason it failed.",
+            "description": "One item's outcome inside a batch \u2014 success or the reason it failed.",
             "properties": {
               "id": {
                 "anyOf": [
@@ -4187,7 +4187,7 @@
             "x-sdl": "entity"
           }
         },
-        "description": "A batch's outcome: per-item results plus the two counts that matter.\n\n`needs_confirmation` doubles as the preview flag — on a preview pass the\nitems carry the intended targets and nothing has been touched yet.",
+        "description": "A batch's outcome: per-item results plus the two counts that matter.\n\n`needs_confirmation` doubles as the preview flag \u2014 on a preview pass the\nitems carry the intended targets and nothing has been touched yet.",
         "properties": {
           "items": {
             "items": {
@@ -4261,7 +4261,7 @@
     },
     {
       "name": "enable_repo_notifications",
-      "description": "Turn on live GitHub notifications for one repo — get notified in Imperal (bell/telegram/email per your notification settings) when an issue/PR opens, your review is requested, a PR merges, CI fails, or someone pushes to the default branch. Registers a real webhook on that repo (requires admin access to it on GitHub's side).",
+      "description": "Turn on live GitHub notifications for one repo \u2014 get notified in Imperal (bell/telegram/email per your notification settings) when an issue/PR opens, your review is requested, a PR merges, CI fails, or someone pushes to the default branch. Registers a real webhook on that repo (requires admin access to it on GitHub's side).",
       "action_type": "write",
       "chain_callable": true,
       "effects": [
@@ -4271,7 +4271,7 @@
       "params_schema": {
         "properties": {
           "repo": {
-            "description": "Repository full name, e.g. 'owner/repo' — from list_repositories",
+            "description": "Repository full name, e.g. 'owner/repo' \u2014 from list_repositories",
             "title": "Repo",
             "type": "string"
           }
@@ -4389,7 +4389,7 @@
       "params_schema": {
         "properties": {
           "repo": {
-            "description": "Repository full name, e.g. 'owner/repo' — from list_repositories",
+            "description": "Repository full name, e.g. 'owner/repo' \u2014 from list_repositories",
             "title": "Repo",
             "type": "string"
           }
@@ -4520,7 +4520,7 @@
   "secrets": [
     {
       "name": "github_webhook_secret",
-      "description": "Shared secret used to sign per-repo webhooks this extension registers on GitHub (one per repo with notifications enabled, see handlers_webhook_events.py) — verifies that incoming event deliveries really come from GitHub (HMAC-SHA256 signature check) before trusting them. Generate any random string; it's set as the webhook's own secret at registration time, not read from GitHub.",
+      "description": "Shared secret used to sign per-repo webhooks this extension registers on GitHub (one per repo with notifications enabled, see handlers_webhook_events.py) \u2014 verifies that incoming event deliveries really come from GitHub (HMAC-SHA256 signature check) before trusting them. Generate any random string; it's set as the webhook's own secret at registration time, not read from GitHub.",
       "required": true,
       "write_mode": "user",
       "max_bytes": 256,
@@ -4528,7 +4528,7 @@
     },
     {
       "name": "github_client_id",
-      "description": "The classic OAuth App's Client ID (Developer settings → OAuth Apps → your app). Public by nature (sent in browser redirect URLs), declared as a secret only for consistency with the rest of the App's identity.",
+      "description": "The classic OAuth App's Client ID (Developer settings \u2192 OAuth Apps \u2192 your app). Public by nature (sent in browser redirect URLs), declared as a secret only for consistency with the rest of the App's identity.",
       "required": true,
       "write_mode": "user",
       "max_bytes": 128,
@@ -4536,7 +4536,7 @@
     },
     {
       "name": "github_client_secret",
-      "description": "The classic OAuth App's Client Secret (Developer settings → OAuth Apps → your app → Generate a new client secret). Used server-side only, to exchange an authorization `code` for an access token — never sent to the browser, never logged.",
+      "description": "The classic OAuth App's Client Secret (Developer settings \u2192 OAuth Apps \u2192 your app \u2192 Generate a new client secret). Used server-side only, to exchange an authorization `code` for an access token \u2014 never sent to the browser, never logged.",
       "required": true,
       "write_mode": "user",
       "max_bytes": 256,
@@ -4544,7 +4544,7 @@
     },
     {
       "name": "github_encryption_key",
-      "description": "Fernet key (generate with `Fernet.generate_key()`) used to encrypt stored user OAuth tokens (access_token/refresh_token) at rest in ctx.store. Same pattern as wp-site-connector's wp_encryption_key — a dedicated key for this extension, not shared with any other.",
+      "description": "Fernet key (generate with `Fernet.generate_key()`) used to encrypt stored user OAuth tokens (access_token/refresh_token) at rest in ctx.store. Same pattern as wp-site-connector's wp_encryption_key \u2014 a dedicated key for this extension, not shared with any other.",
       "required": true,
       "write_mode": "user",
       "max_bytes": 128,
