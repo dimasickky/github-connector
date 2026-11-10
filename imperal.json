@@ -1,7 +1,7 @@
 {
-  "sdk_version": "5.15.1",
+  "sdk_version": "6.5.3",
   "app_id": "github-connector-extension",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "name": "GitHub Connector",
   "description": "Browse your GitHub repositories, view code and commit history, and manage pull requests and issues directly from chat.",
   "icon": "icon.svg",
