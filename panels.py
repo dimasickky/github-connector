@@ -63,6 +63,7 @@ async def sidebar(ctx, **kwargs):
     resp = await github_client.gh_get(ctx, token, "/user/repos", {
         "per_page": 30, "affiliation": "owner,collaborator,organization_member", "sort": "updated",
     })
+    stats_bar = None
     if resp.status_code != 200:
         repo_list = ui.Alert(message=github_client.gh_error_message(resp.status_code), type="error")
     else:
@@ -70,6 +71,10 @@ async def sidebar(ctx, **kwargs):
         if not repos:
             repo_list = ui.Empty(message="No repositories found for this account.")
         else:
+            stats_bar = ui.Stats([
+                ui.Stat(label="Repositories", value=len(repos), icon="GitBranch", color="blue"),
+                ui.Stat(label="Account", value=account or "Connected", icon="User", color="green"),
+            ], columns=2)
             items = [
                 ui.ListItem(id=r["full_name"], title=r["full_name"],
                             on_click=ui.Call("__panel__center", view="", repo=r["full_name"]))
@@ -86,4 +91,8 @@ async def sidebar(ctx, **kwargs):
         on_click=ui.Call("disconnect_github", confirm=True),
     )
 
-    return ui.Stack(gap=3, children=[header, ui.Divider(), repo_list, ui.Divider(), disconnect_btn])
+    children = [header, ui.Divider()]
+    if stats_bar:
+        children.append(stats_bar)
+    children.extend([repo_list, ui.Divider(), disconnect_btn])
+    return ui.Stack(gap=3, children=children)
