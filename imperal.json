@@ -4596,6 +4596,6 @@
       "cache_ttl": 60
     }
   ],
-  "schema_version": "1.6.0",
-  "category": "development"
+  "category": "development",
+  "manifest_schema_version": 3
 }
